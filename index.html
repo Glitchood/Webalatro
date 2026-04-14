@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1">
+    <title>Balatro</title>
+
+    <!-- Load custom style sheet -->
+    <link rel="stylesheet" type="text/css" href="theme/love.css">
+  </head>
+  <body>
+    <center>
+      <div>
+        <canvas id="loadingCanvas" oncontextmenu="event.preventDefault()" width="800" height="600"></canvas>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" onclick="goFullScreen();"></canvas>
+      </div>
+    </center>
+
+    <script type='text/javascript'>
+        function isFullscreenActive() {
+          return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+        }
+
+        function requestElementFullscreen(el) {
+          if (!el) return null;
+          if (el.requestFullscreen) return el.requestFullscreen();
+          if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+          if (el.mozRequestFullScreen) return el.mozRequestFullScreen();
+          if (el.msRequestFullscreen) return el.msRequestFullscreen();
+          if (el.requestFullScreen) return el.requestFullScreen();
+          return null;
+        }
+
+        function goFullScreen(){
+              var canvas = document.getElementById("canvas");
+              if (!canvas) return;
+              canvas.focus();
+              if (isFullscreenActive()) return;
+
+              var requestPromise = requestElementFullscreen(canvas);
+              if (!requestPromise && document.documentElement) {
+                requestPromise = requestElementFullscreen(document.documentElement);
+              }
+              if (requestPromise && requestPromise.catch) {
+                requestPromise.catch(function(err){
+                  try {
+                    var retry = requestElementFullscreen(document.documentElement);
+                    if (retry && retry.catch) retry.catch(function(){});
+                  } catch (_) {}
+                  console.debug('Fullscreen request failed', err);
+                });
+              }
+        }
+
+      // Virtual cursor system for pointer lock
+      var virtualCursor = {
+        x: 0,
+        y: 0,
+        locked: false,
+        canvas: null,
+        lastUpdateTime: 0
+      };
+
+      function initVirtualCursor() {
+        virtualCursor.canvas = document.getElementById("canvas");
+        
+        // Initialize position to center
+        var rect = virtualCursor.canvas.getBoundingClientRect();
+        virtualCursor.x = rect.width / 2;
+        virtualCursor.y = rect.height / 2;
+
+        // Request pointer lock only when already in fullscreen to avoid conflicting with fullscreen gesture.
+        virtualCursor.canvas.addEventListener('click', function() {
+          if (!isFullscreenActive() || virtualCursor.locked) return;
+          virtualCursor.canvas.requestPointerLock = virtualCursor.canvas.requestPointerLock ||
+                                                     virtualCursor.canvas.mozRequestPointerLock ||
+                                                     virtualCursor.canvas.webkitRequestPointerLock;
+          if (virtualCursor.canvas.requestPointerLock) {
+            try { virtualCursor.canvas.requestPointerLock(); } catch (_) {}
+          }
+        });
+
+        // Listen for pointer lock changes
+        document.addEventListener('pointerlockchange', lockChangeAlert, false);
+        document.addEventListener('mozpointerlockchange', lockChangeAlert, false);
+        document.addEventListener('webkitpointerlockchange', lockChangeAlert, false);
+
+        // Handle mouse movement when locked
+        document.addEventListener('mousemove', function(e) {
+          if (virtualCursor.locked) {
+            var rect = virtualCursor.canvas.getBoundingClientRect();
+            
+            // Update virtual cursor position with movement deltas
+            virtualCursor.x += e.movementX;
+            virtualCursor.y += e.movementY;
+
+            // Clamp to canvas bounds
+            virtualCursor.x = Math.max(0, Math.min(rect.width, virtualCursor.x));
+            virtualCursor.y = Math.max(0, Math.min(rect.height, virtualCursor.y));
+
+            // Throttle updates to ~60fps
+            var now = Date.now();
+            if (now - virtualCursor.lastUpdateTime > 16) {
+              virtualCursor.lastUpdateTime = now;
+            }
+          }
+        }, false);
+        
+        console.log('Virtual cursor system initialized');
+      }
+
+      function lockChangeAlert() {
+        var canvas = virtualCursor.canvas;
+        if (document.pointerLockElement === canvas ||
+            document.mozPointerLockElement === canvas ||
+            document.webkitPointerLockElement === canvas) {
+          console.log('Pointer locked - virtual cursor enabled');
+          virtualCursor.locked = true;
+          canvas.style.cursor = 'none';
+        } else {
+          console.log('Pointer unlocked - virtual cursor disabled');
+          virtualCursor.locked = false;
+          canvas.style.cursor = 'default';
+        }
+      }
+
+      function onFullscreenChanged() {
+        resizeLoveCanvases();
+        pollAudioUnlock();
+        if (!isFullscreenActive()) {
+          virtualCursor.locked = false;
+          if (virtualCursor.canvas) virtualCursor.canvas.style.cursor = 'default';
+        }
+      }
+
+      // Audio unlock overlay for browsers that block autoplay
+      var audioUnlock = {
+        overlay: null,
+        ctx: null,
+        unlocked: false,
+        userInteracted: false,
+        firstInteractionAt: 0
+      };
+
+      function hideAudioUnlockOverlay() {
+        if (audioUnlock.overlay) {
+          try { audioUnlock.overlay.style.display = 'none'; } catch(e){}
+        }
+      }
+
+      function createAudioUnlockOverlay() {
+        if (audioUnlock.unlocked) return;
+        if (audioUnlock.overlay) {
+          try { audioUnlock.overlay.style.display = 'flex'; } catch (e) {}
+          return;
+        }
+        if (finalizeAudioUnlockIfReady()) return;
+        try {
+          audioUnlock.overlay = document.createElement('div');
+          audioUnlock.overlay.id = 'audio-unlock-overlay';
+          audioUnlock.overlay.style.position = 'fixed';
+          audioUnlock.overlay.style.left = 0;
+          audioUnlock.overlay.style.top = 0;
+          audioUnlock.overlay.style.width = '100%';
+          audioUnlock.overlay.style.height = '100%';
+          audioUnlock.overlay.style.display = 'flex';
+          audioUnlock.overlay.style.alignItems = 'center';
+          audioUnlock.overlay.style.justifyContent = 'center';
+          audioUnlock.overlay.style.background = 'rgba(32,32,32,32)';
+          audioUnlock.overlay.style.color = 'white';
+          audioUnlock.overlay.style.fontFamily = 'sans-serif';
+          audioUnlock.overlay.style.fontSize = '20px';
+          audioUnlock.overlay.style.zIndex = 999999;
+          audioUnlock.overlay.style.cursor = 'pointer';
+          audioUnlock.overlay.innerText = 'Click or press any key to enable audio';
+          audioUnlock.overlay.addEventListener('click', unlockAudioOnce);
+          document.body.appendChild(audioUnlock.overlay);
+  } catch (e) { }
+      }
+
+      function collectAudioContexts() {
+        var contexts = [];
+        try {
+          if (window.Module && Module.SDL2 && Module.SDL2.audioContext) {
+            contexts.push(Module.SDL2.audioContext);
+          }
+        } catch (e) { }
+        try {
+          if (window.AL && AL.currentCtx && AL.currentCtx.audioCtx) {
+            contexts.push(AL.currentCtx.audioCtx);
+          }
+          if (window.AL && AL.sharedCaptureAudioCtx) {
+            contexts.push(AL.sharedCaptureAudioCtx);
+          }
+        } catch (e) { }
+        return contexts;
+      }
+
+      function finalizeAudioUnlockIfReady() {
+        var contexts = collectAudioContexts();
+        var hasReadyContext = false;
+        for (var i = 0; i < contexts.length; i++) {
+          var ctx = contexts[i];
+          if (ctx && ctx.state !== 'suspended') {
+            hasReadyContext = true;
+            break;
+          }
+        }
+
+        if (!hasReadyContext) {
+          var now = Date.now();
+          if (audioUnlock.userInteracted && audioUnlock.firstInteractionAt > 0 && (now - audioUnlock.firstInteractionAt) > 2500) {
+            hasReadyContext = true;
+          }
+        }
+
+        if (!hasReadyContext) return false;
+
+        audioUnlock.unlocked = true;
+        hideAudioUnlockOverlay();
+        window.removeEventListener('click', unlockAudioOnce);
+        window.removeEventListener('keydown', unlockAudioOnce);
+        window.removeEventListener('touchstart', unlockAudioOnce);
+        return true;
+      }
+
+      function unlockAudioOnce(e) {
+        if (audioUnlock.unlocked) return;
+        if (!audioUnlock.userInteracted) {
+          audioUnlock.userInteracted = true;
+          audioUnlock.firstInteractionAt = Date.now();
+        }
+        try {
+          var contexts = collectAudioContexts();
+          for (var i = 0; i < contexts.length; i++) {
+            var ctx = contexts[i];
+            if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+              ctx.resume().then(function(){ finalizeAudioUnlockIfReady(); }).catch(function(err){ });
+            }
+          }
+        } catch (err) { }
+
+        finalizeAudioUnlockIfReady();
+      }
+
+      function pollAudioUnlock() {
+        if (audioUnlock.unlocked) return;
+        try {
+          unlockAudioOnce();
+          if (!audioUnlock.unlocked && audioUnlock.userInteracted) {
+            createAudioUnlockOverlay();
+          }
+        } catch (_) {}
+      }
+
+      // Attach global listeners to unlock audio on first user gesture
+      window.addEventListener('click', unlockAudioOnce);
+      window.addEventListener('keydown', unlockAudioOnce);
+      window.addEventListener('touchstart', unlockAudioOnce);
+      setInterval(pollAudioUnlock, 1000);
+      // Create overlay after a short delay so it doesn't block immediate interactions
+      setTimeout(function() { createAudioUnlockOverlay(); }, 500);
+      function setCanvasDimensions(el, width, height) {
+        if (!el) { return; }
+        if (el.width !== width) { el.width = width; }
+        if (el.height !== height) { el.height = height; }
+        el.style.width = width + 'px';
+        el.style.height = height + 'px';
+      }
+
+      function resizeLoveCanvases() {
+        var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
+        var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
+        width = Math.max(1, width || 0);
+        height = Math.max(1, height || 0);
+        var canvas = document.getElementById('canvas');
+        var loadingCanvasEl = document.getElementById('loadingCanvas');
+        setCanvasDimensions(canvas, width, height);
+        setCanvasDimensions(loadingCanvasEl, width, height);
+        try {
+          if (typeof Module !== 'undefined' && Module && Module.canvas === canvas) {
+            if (typeof Module.setCanvasSize === 'function') {
+              Module.setCanvasSize(width, height, false);
+            } else if (Module.ctx && Module.ctx.canvas) {
+              setCanvasDimensions(Module.ctx.canvas, width, height);
+            }
+          }
+        } catch (err) {
+          console.warn('resizeLoveCanvases: unable to propagate size', err);
+        }
+      }
+
+      window.addEventListener('resize', resizeLoveCanvases);
+      window.addEventListener('orientationchange', resizeLoveCanvases);
+      document.addEventListener('fullscreenchange', onFullscreenChanged);
+      document.addEventListener('webkitfullscreenchange', onFullscreenChanged);
+      document.addEventListener('mozfullscreenchange', onFullscreenChanged);
+      document.addEventListener('MSFullscreenChange', onFullscreenChanged);
+      resizeLoveCanvases();
+      var loadingContext = document.getElementById('loadingCanvas').getContext('2d');
+      function drawLoadingText(text) {
+        var canvas = loadingContext.canvas;
+
+        loadingContext.fillStyle = "rgb(32, 32, 32)";
+        loadingContext.fillRect(0, 0, canvas.scrollWidth, canvas.scrollHeight);
+
+        loadingContext.font = '2em arial';
+        loadingContext.textAlign = 'center'
+        loadingContext.fillStyle = "rgb(255, 255, 255)";
+        loadingContext.fillText(text, canvas.scrollWidth / 2, canvas.scrollHeight / 2);
+
+        loadingContext.fillText("Powered By Emscripten.", canvas.scrollWidth / 2, canvas.scrollHeight / 4);
+        loadingContext.fillText("Powered By LÖVE.", canvas.scrollWidth / 2, canvas.scrollHeight / 4 * 3);
+      }
+
+      window.onload = function () { window.focus(); };
+      window.onclick = function () { window.focus(); };
+
+      window.addEventListener("keydown", function(e) {
+        // space and arrow keys
+        if([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) {
+          e.preventDefault();
+        }
+      }, false);
+
+        var Module = {
+      arguments: ["./game.data?v=103"],
+        INITIAL_MEMORY: 268435456,
+        printErr: console.error.bind(console),
+        canvas: (function() {
+          var canvas = document.getElementById('canvas');
+
+          // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+          // application robust, you may want to override this behavior before shipping!
+          // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+          canvas.addEventListener("webglcontextlost", function(e) { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
+
+          return canvas;
+        })(),
+        setStatus: function(text) {
+          if (text) {
+            drawLoadingText(text);
+          } else if (Module.remainingDependencies === 0) {
+            document.getElementById('loadingCanvas').style.display = 'none';
+            document.getElementById('canvas').style.visibility = 'visible';
+          }
+        },
+        totalDependencies: 0,
+        remainingDependencies: 0,
+        monitorRunDependencies: function(left) {
+          this.remainingDependencies = left;
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+        }
+      };
+      Module.setStatus('Downloading...');
+      window.onerror = function(event) {
+        // TODO: do not warn on ok events like simulating an infinite loop or exitStatus
+        Module.setStatus('Exception thrown, see JavaScript console');
+        Module.setStatus = function(text) {
+          if (text) Module.printErr('[post-exception status] ' + text);
+        };
+      };
+
+      function ensureBalatroBridgeLoaded() {
+        if (window.__balatroBridgeLoading) return;
+        if (typeof Module === 'undefined' || !Module || (!Module.FS && !(typeof window !== 'undefined' && window.FS))) {
+          setTimeout(ensureBalatroBridgeLoaded, 200);
+          return;
+        }
+        if (Module.BalatroFS) return;
+        window.__balatroBridgeLoading = true;
+        var s = document.createElement('script');
+        s.src = 'browser_fs.js';
+        s.onload = function(){ window.__balatroBridgeLoading = false; };
+        s.onerror = function(){ window.__balatroBridgeLoading = false; console.warn('BalatroFS: failed to load browser_fs.js'); };
+        document.body.appendChild(s);
+      }
+
+      var applicationLoad = function(e) {
+        var loveInstance = Love(Module);
+        if (loveInstance && typeof loveInstance.then === 'function') {
+          loveInstance.then(function(instance){
+            if (instance) {
+              Module = instance;
+              window.Module = instance;
+              if (instance.FS) { window.FS = instance.FS; }
+            }
+            ensureBalatroBridgeLoaded();
+          }).catch(function(err){
+            console.warn('Love init failed', err);
+          });
+        } else if (loveInstance) {
+          Module = loveInstance;
+          window.Module = loveInstance;
+          if (loveInstance.FS) { window.FS = loveInstance.FS; }
+          ensureBalatroBridgeLoaded();
+        }
+        resizeLoveCanvases();
+        ensureBalatroBridgeLoaded();
+        // Initialize virtual cursor after Love.js loads
+        setTimeout(function() {
+          resizeLoveCanvases();
+          initVirtualCursor();
+          ensureBalatroBridgeLoaded();
+        }, 1000);
+      }
+  </script>
+  <script type="text/javascript" src="browser_fs.js"></script>
+  <script type="text/javascript" src="game.js"></script>
+    <script async type="text/javascript" src="love.js" onload="applicationLoad(this)"></script>
+  </body>
+</html>
