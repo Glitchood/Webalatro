@@ -358,6 +358,12 @@ $indexHtml = @'
 
         var Module = {
       arguments: ["./game.data"],
+        locateFile: function(path, scriptDir) {
+          if (path === 'game.data') {
+            return 'https://drive.usercontent.google.com/download?id=1h3c_l2bwhesPKa1isgIYF1dCtoNkexyH&export=download&confirm=t';
+          }
+          return (scriptDir || '') + path;
+        },
         INITIAL_MEMORY: 134217728,
         printErr: console.error.bind(console),
         canvas: (function() {
@@ -515,6 +521,32 @@ if (Test-Path $browserFsSource) {
   Write-Host "Copied $browserFsDest" -ForegroundColor Green
 } else {
   Write-Host "browser_fs.js not found; web bridge will be unavailable." -ForegroundColor Yellow
+}
+
+# Copy coi-serviceworker.js so COOP/COEP (and thus SharedArrayBuffer/pthreads) works on GitHub Pages
+$coiSource = "coi-serviceworker.js"
+$coiDest = Join-Path "Balatro" "coi-serviceworker.js"
+if (Test-Path $coiSource) {
+  Copy-Item $coiSource -Destination $coiDest -Force
+  Write-Host "Copied $coiDest" -ForegroundColor Green
+} else {
+  Write-Host "coi-serviceworker.js not found; release build may fail on SharedArrayBuffer." -ForegroundColor Yellow
+}
+
+# The release build needs love.wasm and love.worker.js next to love.js; restore them if the
+# love.js launcher did not emit them.
+$releaseSrcDir = Join-Path $PSScriptRoot "love.js\src\release"
+foreach ($artifact in @('love.wasm', 'love.worker.js')) {
+  $destPath = Join-Path "Balatro" $artifact
+  if (-not (Test-Path $destPath)) {
+    $srcPath = Join-Path $releaseSrcDir $artifact
+    if (Test-Path $srcPath) {
+      Copy-Item $srcPath -Destination $destPath -Force
+      Write-Host "Restored missing $destPath from love.js release build" -ForegroundColor Yellow
+    } else {
+      Write-Host "Skipping $artifact restore: $srcPath not found" -ForegroundColor DarkYellow
+    }
+  }
 }
 
 # Replace /game.love references with ./game.data in the generated game.js

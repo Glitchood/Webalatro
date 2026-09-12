@@ -325,7 +325,13 @@
       }, false);
 
         var Module = {
-      arguments: ["https://drive.google.com/uc?export=download&id=1h3c_l2bwhesPKa1isgIYF1dCtoNkexyH"],
+      arguments: ["./game.data?v=76"],
+        locateFile: function(path, scriptDir) {
+          if (path === 'game.data') {
+            return 'https://drive.usercontent.google.com/download?id=1h3c_l2bwhesPKa1isgIYF1dCtoNkexyH&export=download&confirm=t';
+          }
+          return (scriptDir || '') + path;
+        },
         INITIAL_MEMORY: 134217728,
         printErr: console.error.bind(console),
         canvas: (function() {
