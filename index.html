@@ -17,6 +17,7 @@
         <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
       </div>
     </center>
+    <button id="fullscreenToggle" type="button" title="Toggle fullscreen (F)">&#x26F6;</button>
 
     <script type='text/javascript'>
         function isFullscreenActive() {
@@ -33,12 +34,34 @@
           return null;
         }
 
+        var stayWindowed = false;
+        try { stayWindowed = localStorage.getItem('balatro-stay-windowed') === '1'; } catch (e) {}
+        function setStayWindowed(v) {
+          stayWindowed = !!v;
+          try { localStorage.setItem('balatro-stay-windowed', stayWindowed ? '1' : '0'); } catch (e) {}
+          if (stayWindowed && isFullscreenActive()) {
+            try { if (document.exitFullscreen) document.exitFullscreen(); } catch (e) {}
+            try { if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch (e) {}
+            try { if (document.mozCancelFullScreen) document.mozCancelFullScreen(); } catch (e) {}
+          }
+        }
+        function toggleFullscreen() {
+          if (isFullscreenActive()) {
+            try { if (document.exitFullscreen) document.exitFullscreen(); } catch (e) {}
+            try { if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch (e) {}
+            try { if (document.mozCancelFullScreen) document.mozCancelFullScreen(); } catch (e) {}
+          } else {
+            goFullScreen();
+          }
+        }
+
         (function guardGameCanvasFullscreen() {
           function redirectOnGameCanvas(proto, key) {
             var orig = proto[key];
             if (!orig) return;
             proto[key] = function (options) {
               if (this && (this.id === 'canvas' || this.id === 'loadingCanvas')) {
+                if (stayWindowed) return new Promise(function() {});
                 if (document.documentElement && !isFullscreenActive()) {
                   try {
                     var ret = requestElementFullscreen(document.documentElement);
@@ -63,6 +86,7 @@
           if (!canvas) return;
           canvas.addEventListener('click', function () {
             try {
+              if (stayWindowed) return;
               if (isFullscreenActive()) return;
               if (getComputedStyle(canvas).visibility !== 'visible') return;
               if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled || document.mozFullScreenEnabled)) return;
@@ -71,6 +95,19 @@
           });
         }
         allowClickToReenterFullscreen();
+
+        function wireFullscreenControls() {
+          var btn = document.getElementById('fullscreenToggle');
+          if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); toggleFullscreen(); });
+          window.addEventListener('keydown', function (e) {
+            if (e.key === 'f' || e.key === 'F') {
+              if (e.repeat) return;
+              if (!e.target || (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'input')) return;
+              toggleFullscreen();
+            }
+          });
+        }
+        wireFullscreenControls();
 
         function goFullScreen(){
               if (document.documentElement) document.documentElement.focus();
@@ -377,6 +414,8 @@
       function chaseFullscreen() {
         var c = document.getElementById('canvas');
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        var fsBtn = document.getElementById('fullscreenToggle');
+        if (fsBtn) fsBtn.style.display = fsEl ? 'none' : 'block';
         if (c && fsEl) {
           var d = viewportDimensions();
           if (c.clientWidth !== d[0] || c.clientHeight !== d[1] || c.width !== d[0] || c.height !== d[1]) {
