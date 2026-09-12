@@ -27,6 +27,17 @@ if (typeof window === 'undefined') {
             return;
         }
 
+        // Do not intercept cross-origin requests. Rewrapping the response as a new
+        // Response() here strips Access-Control-Allow-Origin, which breaks CORS fetches
+        // such as game.data loaded from Google Drive. Let those go straight to the network.
+        let requestOrigin = null;
+        try {
+            requestOrigin = new URL(r.url).origin;
+        } catch (e) { }
+        if (requestOrigin !== self.location.origin) {
+            return;
+        }
+
         const request = (coepCredentialless && r.mode === "no-cors")
             ? new Request(r, {
                 credentials: "omit",
