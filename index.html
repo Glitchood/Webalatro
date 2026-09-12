@@ -58,6 +58,20 @@
           redirectOnGameCanvas(Element.prototype, 'msRequestFullscreen');
         })();
 
+        function allowClickToReenterFullscreen() {
+          var canvas = document.getElementById('canvas');
+          if (!canvas) return;
+          canvas.addEventListener('click', function () {
+            try {
+              if (isFullscreenActive()) return;
+              if (getComputedStyle(canvas).visibility !== 'visible') return;
+              if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled || document.mozFullScreenEnabled)) return;
+              goFullScreen();
+            } catch (err) {}
+          });
+        }
+        allowClickToReenterFullscreen();
+
         function goFullScreen(){
               if (document.documentElement) document.documentElement.focus();
               if (isFullscreenActive()) return;
