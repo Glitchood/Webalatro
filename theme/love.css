@@ -69,22 +69,3 @@ a:hover {
     visibility: hidden;
     z-index: 1;
 }
-
-#fullscreenToggle {
-    position: fixed;
-    right: 8px;
-    bottom: 8px;
-    z-index: 9;
-    background: rgba(0, 0, 0, 0.45);
-    color: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 6px;
-    font-size: 16px;
-    line-height: 1;
-    padding: 6px 9px;
-    user-select: none;
-}
-
-#fullscreenToggle:hover {
-    background: rgba(0, 0, 0, 0.7);
-}
