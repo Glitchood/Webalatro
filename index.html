@@ -14,7 +14,7 @@
     <center>
       <div>
         <canvas id="loadingCanvas" oncontextmenu="event.preventDefault()" width="800" height="600"></canvas>
-        <canvas id="canvas" oncontextmenu="event.preventDefault()" onclick="goFullScreen();"></canvas>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
       </div>
     </center>
 
@@ -33,22 +33,30 @@
           return null;
         }
 
+        (function disableGameCanvasFullscreen() {
+          function blockOnGameCanvas(proto, key) {
+            var orig = proto[key];
+            if (!orig) return;
+            proto[key] = function (options) {
+              if (this && (this.id === 'canvas' || this.id === 'loadingCanvas')) {
+                return new Promise(function() {});
+              }
+              return orig.call(this, options);
+            };
+          }
+          blockOnGameCanvas(Element.prototype, 'requestFullscreen');
+          blockOnGameCanvas(Element.prototype, 'webkitRequestFullscreen');
+          blockOnGameCanvas(Element.prototype, 'mozRequestFullScreen');
+          blockOnGameCanvas(Element.prototype, 'msRequestFullscreen');
+        })();
+
         function goFullScreen(){
-              var canvas = document.getElementById("canvas");
-              if (!canvas) return;
-              canvas.focus();
+              if (document.documentElement) document.documentElement.focus();
               if (isFullscreenActive()) return;
 
-              var requestPromise = requestElementFullscreen(canvas);
-              if (!requestPromise && document.documentElement) {
-                requestPromise = requestElementFullscreen(document.documentElement);
-              }
+              var requestPromise = requestElementFullscreen(document.documentElement);
               if (requestPromise && requestPromise.catch) {
                 requestPromise.catch(function(err){
-                  try {
-                    var retry = requestElementFullscreen(document.documentElement);
-                    if (retry && retry.catch) retry.catch(function(){});
-                  } catch (_) {}
                   console.debug('Fullscreen request failed', err);
                 });
               }
@@ -266,30 +274,27 @@
         if (!el) { return; }
         if (el.width !== width) { el.width = width; }
         if (el.height !== height) { el.height = height; }
-        el.style.width = width + 'px';
-        el.style.height = height + 'px';
+      }
+
+      function viewportDimensions() {
+        var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
+        var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        if (fsEl) {
+          if (fsEl.clientWidth) width = fsEl.clientWidth;
+          if (fsEl.clientHeight) height = fsEl.clientHeight;
+        }
+        width = Math.max(1, width || 0);
+        height = Math.max(1, height || 0);
+        return [width, height];
       }
 
       function resizeLoveCanvases() {
-        var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
-        var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
-        width = Math.max(1, width || 0);
-        height = Math.max(1, height || 0);
+        var dims = viewportDimensions();
         var canvas = document.getElementById('canvas');
         var loadingCanvasEl = document.getElementById('loadingCanvas');
-        setCanvasDimensions(canvas, width, height);
-        setCanvasDimensions(loadingCanvasEl, width, height);
-        try {
-          if (typeof Module !== 'undefined' && Module && Module.canvas === canvas) {
-            if (typeof Module.setCanvasSize === 'function') {
-              Module.setCanvasSize(width, height, false);
-            } else if (Module.ctx && Module.ctx.canvas) {
-              setCanvasDimensions(Module.ctx.canvas, width, height);
-            }
-          }
-        } catch (err) {
-          console.warn('resizeLoveCanvases: unable to propagate size', err);
-        }
+        setCanvasDimensions(canvas, dims[0], dims[1]);
+        setCanvasDimensions(loadingCanvasEl, dims[0], dims[1]);
       }
 
       window.addEventListener('resize', resizeLoveCanvases);
