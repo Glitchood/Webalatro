@@ -5,7 +5,8 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1">
-    <title>Balatro</title>
+    <title>Webalatro</title>
+    <link rel="icon" type="image/png" href="favicon.png">
 
     <!-- Load custom style sheet -->
     <link rel="stylesheet" type="text/css" href="theme/love.css">
@@ -153,9 +154,9 @@
       }
 
       function onFullscreenChanged() {
-        resizeLoveCanvases();
-        setTimeout(resizeLoveCanvases, 80);
-        setTimeout(resizeLoveCanvases, 250);
+        syncCanvasSizes();
+        setTimeout(syncCanvasSizes, 80);
+        setTimeout(syncCanvasSizes, 250);
         pollAudioUnlock();
         if (!isFullscreenActive()) {
           virtualCursor.locked = false;
@@ -291,10 +292,12 @@
       setInterval(pollAudioUnlock, 1000);
       // Create overlay after a short delay so it doesn't block immediate interactions
       setTimeout(function() { createAudioUnlockOverlay(); }, 500);
-      function setCanvasDimensions(el, width, height) {
+      function styleBox(el, width, height, left, top) {
         if (!el) { return; }
         el.style.setProperty('width', width + 'px', 'important');
         el.style.setProperty('height', height + 'px', 'important');
+        el.style.setProperty('left', left + 'px', 'important');
+        el.style.setProperty('top', top + 'px', 'important');
       }
 
       function viewportDimensions() {
@@ -308,32 +311,42 @@
         return [Math.max(1, iw || 0), Math.max(1, ih || 0)];
       }
 
-      function resizeLoveCanvases() {
+      function syncCanvasSizes() {
         var dims = viewportDimensions();
-        var w = dims[0], h = dims[1];
-        setCanvasDimensions(document.getElementById('loadingCanvas'), w, h);
-        setCanvasDimensions(document.getElementById('canvas'), w, h);
-      }
-
-      function keepCanvasSizeSanity() {
-        var dims = viewportDimensions();
-        var w = Math.round(dims[0]);
-        var h = Math.round(dims[1]);
-        if (w <= 0 || h <= 0) return;
-        var canvas = document.getElementById('canvas');
-        if (canvas && canvas.clientWidth > 0) {
-          if (canvas.clientWidth !== w || canvas.clientHeight !== h) {
-            setCanvasDimensions(canvas, w, h);
-          }
-        }
+        var vw = Math.round(dims[0]);
+        var vh = Math.round(dims[1]);
+        if (vw <= 0 || vh <= 0) return;
         var loadingCanvasEl = document.getElementById('loadingCanvas');
-        if (loadingCanvasEl && loadingCanvasEl.clientWidth > 0) {
-          if (loadingCanvasEl.clientWidth !== w || loadingCanvasEl.clientHeight !== h) {
-            setCanvasDimensions(loadingCanvasEl, w, h);
+        if (loadingCanvasEl) {
+          if (loadingCanvasEl.width !== vw) loadingCanvasEl.width = vw;
+          if (loadingCanvasEl.height !== vh) loadingCanvasEl.height = vh;
+          styleBox(loadingCanvasEl, vw, vh, 0, 0);
+        }
+        var c = document.getElementById('canvas');
+        if (!c || c.clientWidth <= 0) return;
+        var bw = (c.width > 0) ? c.width : 300;
+        var bh = (c.height > 0) ? c.height : 150;
+        var bAspect = bw / bh;
+        var vAspect = vw / vh;
+        var w = vw, h = vh;
+        if (Math.abs(bAspect - vAspect) / vAspect > 0.08) {
+          if (bAspect > vAspect) {
+            w = vw;
+            h = Math.max(1, Math.round(vw / bAspect));
+          } else {
+            h = vh;
+            w = Math.max(1, Math.round(vh * bAspect));
           }
         }
+        var left = Math.max(0, Math.round((vw - w) / 2));
+        var top = Math.max(0, Math.round((vh - h) / 2));
+        if (c.clientWidth !== w || c.clientHeight !== h ||
+            Math.abs(c.getBoundingClientRect().left - left) > 0.5 ||
+            Math.abs(c.getBoundingClientRect().top - top) > 0.5) {
+          styleBox(c, w, h, left, top);
+        }
       }
-      setInterval(keepCanvasSizeSanity, 250);
+      setInterval(syncCanvasSizes, 250);
       var loveReconciled = false;
       function ensureLoveBootResize() {
         if (loveReconciled) return;
@@ -341,7 +354,7 @@
         if (!c) return;
         if (typeof Module === 'undefined' || !Module || Module.canvas !== c) return;
         loveReconciled = true;
-        try { resizeLoveCanvases(); } catch (e) {}
+        try { syncCanvasSizes(); } catch (e) {}
         try { afterTransitionDump('boot-reconcile'); } catch (e) {}
       }
       setInterval(ensureLoveBootResize, 500);
@@ -379,22 +392,19 @@
         var c = document.getElementById('canvas');
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
         if (c && fsEl) {
-          var d = viewportDimensions();
-          if (c.clientWidth !== d[0] || c.clientHeight !== d[1]) {
-            resizeLoveCanvases();
-          }
+          syncCanvasSizes();
         }
         requestAnimationFrame(chaseFullscreen);
       }
       chaseFullscreen();
 
-      window.addEventListener('resize', function () { try { keepCanvasSizeSanity(); } catch (e) {} });
-      window.addEventListener('orientationchange', function () { try { keepCanvasSizeSanity(); } catch (e) {} });
+      window.addEventListener('resize', function () { try { syncCanvasSizes(); } catch (e) {} });
+      window.addEventListener('orientationchange', function () { try { syncCanvasSizes(); } catch (e) {} });
       document.addEventListener('fullscreenchange', onFullscreenChanged);
       document.addEventListener('webkitfullscreenchange', onFullscreenChanged);
       document.addEventListener('mozfullscreenchange', onFullscreenChanged);
       document.addEventListener('MSFullscreenChange', onFullscreenChanged);
-      resizeLoveCanvases();
+      syncCanvasSizes();
       var loadingContext = document.getElementById('loadingCanvas').getContext('2d');
       function drawLoadingText(text) {
         var canvas = loadingContext.canvas;
@@ -497,11 +507,11 @@
           if (loveInstance.FS) { window.FS = loveInstance.FS; }
           ensureBalatroBridgeLoaded();
         }
-        resizeLoveCanvases();
+        syncCanvasSizes();
         ensureBalatroBridgeLoaded();
         // Initialize virtual cursor after Love.js loads
         setTimeout(function() {
-          resizeLoveCanvases();
+          syncCanvasSizes();
           initVirtualCursor();
           ensureBalatroBridgeLoaded();
         }, 1000);
