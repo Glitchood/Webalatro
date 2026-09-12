@@ -161,6 +161,7 @@
           virtualCursor.locked = false;
           if (virtualCursor.canvas) virtualCursor.canvas.style.cursor = 'none';
         }
+        try { afterTransitionDump('fullscreenchange'); } catch (e) {}
       }
 
       // Audio unlock overlay for browsers that block autoplay
@@ -353,6 +354,45 @@
         }
       }
       setInterval(keepCanvasSizeSanity, 250);
+      var loveReconciled = false;
+      function ensureLoveBootResize() {
+        if (loveReconciled) return;
+        var c = document.getElementById('canvas');
+        if (!c) return;
+        if (typeof Module === 'undefined' || !Module || Module.canvas !== c) return;
+        loveReconciled = true;
+        try { resizeLoveCanvases(); } catch (e) {}
+        try { afterTransitionDump('boot-reconcile'); } catch (e) {}
+      }
+      setInterval(ensureLoveBootResize, 500);
+      setTimeout(ensureLoveBootResize, 2000);
+      setTimeout(ensureLoveBootResize, 6000);
+      function afterTransitionDump(tag) {
+        setTimeout(function () {
+          try { if (window.__webalatroDump) window.__webalatroDump(tag); } catch (e) {}
+        }, 250);
+      }
+      window.__webalatroDump = function (tag) {
+        var c = document.getElementById('canvas');
+        var r = c ? c.getBoundingClientRect() : null;
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        var info = {
+          tag: tag || 'manual',
+          fs: fsEl ? fsEl.tagName : null,
+          fsClient: fsEl ? Math.round(fsEl.clientWidth) + 'x' + Math.round(fsEl.clientHeight) : null,
+          docClient: Math.round(document.documentElement.clientWidth) + 'x' + Math.round(document.documentElement.clientHeight),
+          inner: window.innerWidth + 'x' + window.innerHeight,
+          screen: (window.screen ? window.screen.width + 'x' + window.screen.height : 'n/a'),
+          dpr: window.devicePixelRatio,
+          canvasAttr: c ? c.width + 'x' + c.height : null,
+          canvasBox: r ? Math.round(r.width) + 'x' + Math.round(r.height) : null,
+          canvasStyle: c ? (c.style.width || '(none)') : null,
+          canvasNative: (typeof Module !== 'undefined' && Module && Module.canvas && Module.canvas.widthNative !== undefined) ? (Module.canvas.widthNative + 'x' + Module.canvas.heightNative) : 'n/a',
+          loveReady: typeof Module !== 'undefined' && !!Module && Module.canvas === c
+        };
+        try { console.log('[webalatro] ' + JSON.stringify(info)); } catch (e) {}
+        return info;
+      }
       function chaseFullscreen() {
         var c = document.getElementById('canvas');
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
