@@ -343,6 +343,17 @@
         }
       }
       setInterval(keepCanvasSizeSanity, 250);
+      function installCanvasBufferGuard() {
+        var canvas = document.getElementById('canvas');
+        if (!canvas || !window.MutationObserver) return;
+        var fixer = function () {
+          var w = Math.round(canvas.clientWidth);
+          var h = Math.round(canvas.clientHeight);
+          if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) resizeLoveCanvases();
+        };
+        new MutationObserver(fixer).observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
+      }
+      installCanvasBufferGuard();
 
       window.addEventListener('resize', resizeLoveCanvases);
       window.addEventListener('orientationchange', resizeLoveCanvases);

@@ -11,11 +11,8 @@ body {
     overflow: hidden;
 }
 
-html,
-body,
-#canvas,
-#loadingCanvas {
-    cursor: none;
+* {
+    cursor: none !important;
 }
 
 h1 {
