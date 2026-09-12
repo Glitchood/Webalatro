@@ -302,14 +302,9 @@
       var syntheticResize = false;
       function viewportDimensions() {
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
-        if (fsEl || document.webkitIsFullScreen) {
-          var sw = window.screen ? window.screen.width : 0;
-          var sh = window.screen ? window.screen.height : 0;
-          var fw = fsEl && fsEl.clientWidth ? fsEl.clientWidth : 0;
-          var fh = fsEl && fsEl.clientHeight ? fsEl.clientHeight : 0;
-          var width = Math.max(sw, fw) || sw || fw;
-          var height = Math.max(sh, fh) || sh || fh;
-          if (width > 0 && height > 0) return [Math.round(width), Math.round(height)];
+        if (fsEl) {
+          var fw = fsEl.clientWidth, fh = fsEl.clientHeight;
+          if (fw > 0 && fh > 0) return [Math.round(fw), Math.round(fh)];
         }
         var iw = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
         var ih = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
@@ -323,6 +318,13 @@
         var loadingCanvasEl = document.getElementById('loadingCanvas');
         setCanvasDimensions(loadingCanvasEl, w, h);
         if (!canvas) return;
+        try {
+          var shared = canvas.canvasSharedPtr;
+          if (shared !== undefined && typeof Module !== 'undefined' && Module && Module.HEAP32) {
+            Module.HEAP32[shared >> 2] = w;
+            Module.HEAP32[(shared >> 2) + 1] = h;
+          }
+        } catch (err) {}
         try {
           if (typeof Module !== 'undefined' && Module && Module.canvas === canvas && typeof Module.setCanvasSize === 'function') {
             Module.setCanvasSize(w, h, false);
@@ -388,6 +390,8 @@
           canvasBox: r ? Math.round(r.width) + 'x' + Math.round(r.height) : null,
           canvasStyle: c ? (c.style.width || '(none)') : null,
           canvasNative: (typeof Module !== 'undefined' && Module && Module.canvas && Module.canvas.widthNative !== undefined) ? (Module.canvas.widthNative + 'x' + Module.canvas.heightNative) : 'n/a',
+          sharedPtr: (c && c.canvasSharedPtr !== undefined) ? c.canvasSharedPtr : null,
+          heap32: (typeof Module !== 'undefined' && Module && Module.HEAP32) ? true : false,
           loveReady: typeof Module !== 'undefined' && !!Module && Module.canvas === c
         };
         try { console.log('[webalatro] ' + JSON.stringify(info)); } catch (e) {}
