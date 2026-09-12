@@ -40,7 +40,11 @@
             proto[key] = function (options) {
               if (this && (this.id === 'canvas' || this.id === 'loadingCanvas')) {
                 if (document.documentElement && !isFullscreenActive()) {
-                  try { return requestElementFullscreen(document.documentElement); }
+                  try {
+                    var ret = requestElementFullscreen(document.documentElement);
+                    try { resizeLoveCanvases(); } catch (e) {}
+                    return ret;
+                  }
                   catch (err) { return new Promise(function() {}); }
                 }
                 return new Promise(function() {});
@@ -134,7 +138,7 @@
         } else {
           console.log('Pointer unlocked - virtual cursor disabled');
           virtualCursor.locked = false;
-          canvas.style.cursor = 'default';
+          canvas.style.cursor = 'none';
         }
       }
 
@@ -145,7 +149,7 @@
         pollAudioUnlock();
         if (!isFullscreenActive()) {
           virtualCursor.locked = false;
-          if (virtualCursor.canvas) virtualCursor.canvas.style.cursor = 'default';
+          if (virtualCursor.canvas) virtualCursor.canvas.style.cursor = 'none';
         }
       }
 
@@ -299,33 +303,37 @@
 
       function resizeLoveCanvases() {
         var dims = viewportDimensions();
+        var w = dims[0], h = dims[1];
         var canvas = document.getElementById('canvas');
         var loadingCanvasEl = document.getElementById('loadingCanvas');
-        setCanvasDimensions(canvas, dims[0], dims[1]);
-        setCanvasDimensions(loadingCanvasEl, dims[0], dims[1]);
+        setCanvasDimensions(loadingCanvasEl, w, h);
+        if (!canvas) return;
+        try {
+          if (typeof Module !== 'undefined' && Module && Module.canvas === canvas && typeof Module.setCanvasSize === 'function') {
+            Module.setCanvasSize(w, h, false);
+          } else {
+            setCanvasDimensions(canvas, w, h);
+          }
+        } catch (err) {
+          setCanvasDimensions(canvas, w, h);
+        }
       }
 
       function keepCanvasSizeSanity() {
         var canvas = document.getElementById('canvas');
-        if (canvas && canvas.clientWidth > 0) {
-          var vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 800);
-          var vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 600);
-          var rect = canvas.getBoundingClientRect();
-          if (rect.right > vw + 1 || rect.bottom > vh + 1 || rect.left < -1 || rect.top < -1) {
-            var scale = Math.min(vw / rect.width, vh / rect.height, 1);
-            var w = Math.round(rect.width * scale);
-            var h = Math.round(rect.height * scale);
-            canvas.style.width = w + 'px';
-            canvas.style.height = h + 'px';
-            canvas.width = w;
-            canvas.height = h;
-            canvas.style.left = Math.round((vw - w) / 2) + 'px';
-            canvas.style.top = Math.round((vh - h) / 2) + 'px';
-          } else {
-            var cw = Math.round(canvas.clientWidth);
-            var ch = Math.round(canvas.clientHeight);
-            if (canvas.width !== cw || canvas.height !== ch) setCanvasDimensions(canvas, cw, ch);
-          }
+        if (!canvas || canvas.clientWidth <= 0) return;
+        var vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 800);
+        var vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 600);
+        var rect = canvas.getBoundingClientRect();
+        if (rect.left < -1 || rect.top < -1 || rect.right > vw + 1 || rect.bottom > vh + 1) {
+          var scale = Math.min(vw / rect.width, vh / rect.height, 1);
+          canvas.style.width = Math.round(rect.width * scale) + 'px';
+          canvas.style.height = Math.round(rect.height * scale) + 'px';
+        }
+        var w = Math.round(canvas.clientWidth);
+        var h = Math.round(canvas.clientHeight);
+        if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
+          resizeLoveCanvases();
         }
         var loadingCanvasEl = document.getElementById('loadingCanvas');
         if (loadingCanvasEl && loadingCanvasEl.clientWidth > 0) {
