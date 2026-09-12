@@ -11,6 +11,13 @@ body {
     overflow: hidden;
 }
 
+html,
+body,
+#canvas,
+#loadingCanvas {
+    cursor: none;
+}
+
 h1 {
     font-family: arial;
     color: rgb( 11, 86, 117 );
