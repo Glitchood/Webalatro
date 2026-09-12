@@ -38,6 +38,18 @@ if (typeof window === 'undefined') {
             return;
         }
 
+        // Serve the game data package from chunked parts committed to the repo.
+        // Google Drive cannot serve game.data to browsers (403 anti-hotlink), so we
+        // keep the file as two <100MB chunks and rebuild it on the fly here.
+        let path = null;
+        try {
+            path = new URL(r.url).pathname;
+        } catch (e) { }
+        if (path && path.substring(path.length - "game.data".length) === "game.data") {
+            event.respondWith(serveGameData(r));
+            return;
+        }
+
         const request = (coepCredentialless && r.mode === "no-cors")
             ? new Request(r, {
                 credentials: "omit",
@@ -68,6 +80,66 @@ if (typeof window === 'undefined') {
                 .catch((e) => console.error(e))
         );
     });
+
+    let gameDataBlobPromise = null;
+    function loadGameDataBlob() {
+        if (!gameDataBlobPromise) {
+            gameDataBlobPromise = Promise.all([
+                fetch("game.data.0").then((r) => r.arrayBuffer()),
+                fetch("game.data.1").then((r) => r.arrayBuffer()),
+            ]).then((parts) => new Blob(parts, { type: "application/octet-stream" }));
+        }
+        return gameDataBlobPromise;
+    }
+
+    async function serveGameData(request) {
+        try {
+            const blob = await loadGameDataBlob();
+            const range = request.headers.get("range");
+            const total = blob.size;
+            if (range) {
+                const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+                let start, end;
+                if (m && m[1] !== "" && m[2] !== "") {
+                    start = parseInt(m[1], 10);
+                    end = parseInt(m[2], 10);
+                } else if (m && m[1] !== "") {
+                    start = parseInt(m[1], 10);
+                    end = total - 1;
+                } else if (m && m[2] !== "") {
+                    start = total - parseInt(m[2], 10);
+                    end = total - 1;
+                }
+                if (start === undefined || start > end || end >= total) {
+                    return new Response(null, {
+                        status: 416,
+                        headers: { "content-range": "bytes */" + total },
+                    });
+                }
+                return new Response(blob.slice(start, end + 1), {
+                    status: 206,
+                    headers: {
+                        "content-type": "application/octet-stream",
+                        "content-range": "bytes " + start + "-" + end + "/" + total,
+                        "content-length": String(end - start + 1),
+                        "accept-ranges": "bytes",
+                    },
+                });
+            }
+            return new Response(blob, {
+                status: 200,
+                headers: {
+                    "content-type": "application/octet-stream",
+                    "content-length": String(total),
+                    "accept-ranges": "bytes",
+                    "content-disposition": 'attachment; filename="game.data"',
+                },
+            });
+        } catch (e) {
+            console.error("serveGameData failed:", e);
+            return new Response("failed to load game data", { status: 500 });
+        }
+    }
 
 } else {
     (() => {
