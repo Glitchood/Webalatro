@@ -289,16 +289,19 @@
       }
 
       function viewportDimensions() {
-        var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
-        var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
-        if (fsEl) {
-          if (fsEl.clientWidth) width = fsEl.clientWidth;
-          if (fsEl.clientHeight) height = fsEl.clientHeight;
+        if (fsEl || document.webkitIsFullScreen) {
+          var sw = window.screen ? window.screen.width : 0;
+          var sh = window.screen ? window.screen.height : 0;
+          var fw = fsEl && fsEl.clientWidth ? fsEl.clientWidth : 0;
+          var fh = fsEl && fsEl.clientHeight ? fsEl.clientHeight : 0;
+          var width = Math.max(sw, fw) || sw || fw;
+          var height = Math.max(sh, fh) || sh || fh;
+          if (width > 0 && height > 0) return [Math.round(width), Math.round(height)];
         }
-        width = Math.max(1, width || 0);
-        height = Math.max(1, height || 0);
-        return [width, height];
+        var iw = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
+        var ih = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
+        return [Math.max(1, iw || 0), Math.max(1, ih || 0)];
       }
 
       function resizeLoveCanvases() {
@@ -322,18 +325,21 @@
       function keepCanvasSizeSanity() {
         var canvas = document.getElementById('canvas');
         if (!canvas || canvas.clientWidth <= 0) return;
-        var vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 800);
-        var vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 600);
-        var rect = canvas.getBoundingClientRect();
-        if (rect.left < -1 || rect.top < -1 || rect.right > vw + 1 || rect.bottom > vh + 1) {
-          var scale = Math.min(vw / rect.width, vh / rect.height, 1);
-          canvas.style.width = Math.round(rect.width * scale) + 'px';
-          canvas.style.height = Math.round(rect.height * scale) + 'px';
-        }
-        var w = Math.round(canvas.clientWidth);
-        var h = Math.round(canvas.clientHeight);
-        if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
-          resizeLoveCanvases();
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        if (fsEl) {
+          var dims = viewportDimensions();
+          var w = dims[0], h = dims[1];
+          if (w > 0 && h > 0 &&
+              (canvas.width !== w || canvas.height !== h ||
+               canvas.clientWidth !== w || canvas.clientHeight !== h)) {
+            resizeLoveCanvases();
+          }
+        } else {
+          var cw = Math.round(canvas.clientWidth);
+          var ch = Math.round(canvas.clientHeight);
+          if (cw > 0 && ch > 0 && (canvas.width !== cw || canvas.height !== ch)) {
+            resizeLoveCanvases();
+          }
         }
         var loadingCanvasEl = document.getElementById('loadingCanvas');
         if (loadingCanvasEl && loadingCanvasEl.clientWidth > 0) {
@@ -354,6 +360,18 @@
         new MutationObserver(fixer).observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
       }
       installCanvasBufferGuard();
+      function chaseFullscreen() {
+        var c = document.getElementById('canvas');
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        if (c && fsEl) {
+          var d = viewportDimensions();
+          if (c.clientWidth !== d[0] || c.clientHeight !== d[1] || c.width !== d[0] || c.height !== d[1]) {
+            resizeLoveCanvases();
+          }
+        }
+        requestAnimationFrame(chaseFullscreen);
+      }
+      chaseFullscreen();
 
       window.addEventListener('resize', resizeLoveCanvases);
       window.addEventListener('orientationchange', resizeLoveCanvases);
