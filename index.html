@@ -140,6 +140,8 @@
 
       function onFullscreenChanged() {
         resizeLoveCanvases();
+        setTimeout(resizeLoveCanvases, 80);
+        setTimeout(resizeLoveCanvases, 250);
         pollAudioUnlock();
         if (!isFullscreenActive()) {
           virtualCursor.locked = false;
@@ -278,6 +280,8 @@
         if (!el) { return; }
         if (el.width !== width) { el.width = width; }
         if (el.height !== height) { el.height = height; }
+        el.style.width = width + 'px';
+        el.style.height = height + 'px';
       }
 
       function viewportDimensions() {
