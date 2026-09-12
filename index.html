@@ -33,21 +33,25 @@
           return null;
         }
 
-        (function disableGameCanvasFullscreen() {
-          function blockOnGameCanvas(proto, key) {
+        (function guardGameCanvasFullscreen() {
+          function redirectOnGameCanvas(proto, key) {
             var orig = proto[key];
             if (!orig) return;
             proto[key] = function (options) {
               if (this && (this.id === 'canvas' || this.id === 'loadingCanvas')) {
+                if (document.documentElement && !isFullscreenActive()) {
+                  try { return requestElementFullscreen(document.documentElement); }
+                  catch (err) { return new Promise(function() {}); }
+                }
                 return new Promise(function() {});
               }
               return orig.call(this, options);
             };
           }
-          blockOnGameCanvas(Element.prototype, 'requestFullscreen');
-          blockOnGameCanvas(Element.prototype, 'webkitRequestFullscreen');
-          blockOnGameCanvas(Element.prototype, 'mozRequestFullScreen');
-          blockOnGameCanvas(Element.prototype, 'msRequestFullscreen');
+          redirectOnGameCanvas(Element.prototype, 'requestFullscreen');
+          redirectOnGameCanvas(Element.prototype, 'webkitRequestFullscreen');
+          redirectOnGameCanvas(Element.prototype, 'mozRequestFullScreen');
+          redirectOnGameCanvas(Element.prototype, 'msRequestFullscreen');
         })();
 
         function goFullScreen(){
@@ -296,6 +300,22 @@
         setCanvasDimensions(canvas, dims[0], dims[1]);
         setCanvasDimensions(loadingCanvasEl, dims[0], dims[1]);
       }
+
+      function keepCanvasSizeSanity() {
+        var canvas = document.getElementById('canvas');
+        if (canvas && canvas.clientWidth > 0) {
+          var w = Math.round(canvas.clientWidth);
+          var h = Math.round(canvas.clientHeight);
+          if (canvas.width !== w || canvas.height !== h) setCanvasDimensions(canvas, w, h);
+        }
+        var loadingCanvasEl = document.getElementById('loadingCanvas');
+        if (loadingCanvasEl && loadingCanvasEl.clientWidth > 0) {
+          var lw = Math.round(loadingCanvasEl.clientWidth);
+          var lh = Math.round(loadingCanvasEl.clientHeight);
+          if (loadingCanvasEl.width !== lw || loadingCanvasEl.height !== lh) setCanvasDimensions(loadingCanvasEl, lw, lh);
+        }
+      }
+      setInterval(keepCanvasSizeSanity, 250);
 
       window.addEventListener('resize', resizeLoveCanvases);
       window.addEventListener('orientationchange', resizeLoveCanvases);
