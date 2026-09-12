@@ -33,6 +33,7 @@ $indexHtml = @'
 <!doctype html>
 <html lang="en-us">
   <head>
+    <script src="coi-serviceworker.js"></script>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1">
@@ -359,9 +360,6 @@ $indexHtml = @'
         var Module = {
       arguments: ["./game.data"],
         locateFile: function(path, scriptDir) {
-          if (path === 'game.data') {
-            return 'https://drive.usercontent.google.com/download?id=1h3c_l2bwhesPKa1isgIYF1dCtoNkexyH&export=download&confirm=t';
-          }
           return (scriptDir || '') + path;
         },
         INITIAL_MEMORY: 134217728,
@@ -547,6 +545,25 @@ foreach ($artifact in @('love.wasm', 'love.worker.js')) {
       Write-Host "Skipping $artifact restore: $srcPath not found" -ForegroundColor DarkYellow
     }
   }
+}
+
+# Split game.data into <100MB chunks so it fits GitHub's per-file limit. GitHub Pages serves
+# them same-origin, and coi-serviceworker.js rebuilds the package from the chunks on the fly.
+$gameDataSource = Join-Path "Balatro" "game.data"
+if (Test-Path $gameDataSource) {
+  $chunkLimit = 104857600  # 100 MiB (GitHub hard per-file limit)
+  $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $gameDataSource))
+  $count = [math]::Ceiling($bytes.Length / $chunkLimit)
+  for ($i = 0; $i -lt $count; $i++) {
+    $offset = $i * $chunkLimit
+    $length = [math]::Min($chunkLimit, $bytes.Length - $offset)
+    $part = New-Object byte[] $length
+    [Array]::Copy($bytes, $offset, $part, 0, $length)
+    [System.IO.File]::WriteAllBytes((Join-Path "Balatro" ("game.data." + $i)), $part)
+  }
+  Write-Host "Split game.data into $count chunk(s)" -ForegroundColor Green
+} else {
+  Write-Host "Balatro\game.data not found; skipping chunk split (deploy needs game.data.0/1)." -ForegroundColor DarkYellow
 }
 
 # Replace /game.love references with ./game.data in the generated game.js
