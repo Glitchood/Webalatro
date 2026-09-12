@@ -1,9 +1,0 @@
-{
-    "name": "Baldatro",
-    "version_number": "1.2.0",
-    "website_url": "https://github.com/SirMaiquis/Balatro-Baldatro",
-    "description": "The jokers are bald! 🃏",
-    "dependencies": [
-        "Steamodded-Steamodded-0.9.8"
-    ]
-}

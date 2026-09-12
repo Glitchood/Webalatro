@@ -1,9 +1,0 @@
-{
-    "name": "JevilsCard",
-    "version_number": "1.0.0",
-    "website_url": "https://www.nexusmods.com/balatro/mods/547",
-    "description": "This mod adds 2 new jokers and a challenge with some CHAOS!",
-    "dependencies": [
-        "Steamodded-Steamodded-0.9.8"
-    ]
-}

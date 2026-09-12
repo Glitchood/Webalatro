@@ -1,9 +1,0 @@
-{
-    "name": "MoreSpeed",
-    "version_number": "0.8.2",
-    "website_url": "https://canary.discord.com/channels/1116389027176787968/1210304870457020487",
-    "description": "Add more speed options",
-    "dependencies": [
-        "Steamopollys-Steamodded-0.8.2"
-    ]
-}

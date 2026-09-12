@@ -1,8 +1,0 @@
-{
-    "name": "PestricaJoker",
-    "version_number": "1.0.0",
-    "website_url": "https://github.com/marinaposting/PesJkr",
-    "description": "Adds pestrica, the legendary jester, gains X0.5 mult for every scoring hands with exactly 4 cards",
-    "dependencies": [
-    ]
-}

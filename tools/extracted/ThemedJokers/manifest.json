@@ -1,9 +1,0 @@
-{
-    "name": "ThemedJokers",
-    "version_number": "0.8.0",
-    "website_url": "https://blizzowx.github.io/",
-    "description": "A bunch of themed Jokers that synergize together",
-	"dependencies": [
-        "Steamopollys-Steamodded-0.9.8"
-    ]
-}
