@@ -298,6 +298,7 @@
         el.style.setProperty('height', height + 'px', 'important');
       }
 
+      var syntheticResize = false;
       function viewportDimensions() {
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
         if (fsEl || document.webkitIsFullScreen) {
@@ -327,6 +328,11 @@
           }
         } catch (err) {}
         setCanvasDimensions(canvas, w, h);
+        try {
+          syntheticResize = true;
+          window.dispatchEvent(new Event('resize'));
+          syntheticResize = false;
+        } catch (err) {}
       }
 
       function keepCanvasSizeSanity() {
@@ -360,7 +366,7 @@
       }
       chaseFullscreen();
 
-      window.addEventListener('resize', function () { try { keepCanvasSizeSanity(); } catch (e) {} });
+      window.addEventListener('resize', function () { if (syntheticResize) return; try { keepCanvasSizeSanity(); } catch (e) {} });
       window.addEventListener('orientationchange', function () { try { keepCanvasSizeSanity(); } catch (e) {} });
       document.addEventListener('fullscreenchange', onFullscreenChanged);
       document.addEventListener('webkitfullscreenchange', onFullscreenChanged);
