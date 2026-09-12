@@ -300,14 +300,9 @@
 
       function viewportDimensions() {
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
-        if (fsEl || document.webkitIsFullScreen) {
-          var sw = window.screen ? window.screen.width : 0;
-          var sh = window.screen ? window.screen.height : 0;
-          var fw = fsEl && fsEl.clientWidth ? fsEl.clientWidth : 0;
-          var fh = fsEl && fsEl.clientHeight ? fsEl.clientHeight : 0;
-          var width = Math.max(sw, fw) || sw || fw;
-          var height = Math.max(sh, fh) || sh || fh;
-          if (width > 0 && height > 0) return [Math.round(width), Math.round(height)];
+        if (fsEl) {
+          var fw = fsEl.clientWidth, fh = fsEl.clientHeight;
+          if (fw > 0 && fh > 0) return [Math.round(fw), Math.round(fh)];
         }
         var iw = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
         var ih = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
@@ -324,34 +319,20 @@
         try {
           if (typeof Module !== 'undefined' && Module && Module.canvas === canvas && typeof Module.setCanvasSize === 'function') {
             Module.setCanvasSize(w, h, false);
-          } else {
-            setCanvasDimensions(canvas, w, h);
           }
-        } catch (err) {
-          setCanvasDimensions(canvas, w, h);
-        }
+        } catch (err) {}
+        setCanvasDimensions(canvas, w, h);
       }
 
       function keepCanvasSizeSanity() {
         var canvas = document.getElementById('canvas');
         if (!canvas || canvas.clientWidth <= 0) return;
-        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
-        if (fsEl) {
-          var dims = viewportDimensions();
-          var w = dims[0], h = dims[1];
-          if (w > 0 && h > 0 &&
-              (canvas.width !== w || canvas.height !== h ||
-               canvas.clientWidth !== w || canvas.clientHeight !== h)) {
-            resizeLoveCanvases();
-          }
-        } else {
-          var dims = viewportDimensions();
-          var w = Math.round(dims[0]);
-          var h = Math.round(dims[1]);
-          if (w > 0 && h > 0 && (canvas.clientWidth !== w || canvas.clientHeight !== h ||
-              canvas.width !== w || canvas.height !== h)) {
-            setCanvasDimensions(canvas, w, h);
-          }
+        var dims = viewportDimensions();
+        var w = Math.round(dims[0]);
+        var h = Math.round(dims[1]);
+        if (w > 0 && h > 0 && (canvas.clientWidth !== w || canvas.clientHeight !== h ||
+            canvas.width !== w || canvas.height !== h)) {
+          resizeLoveCanvases();
         }
         var loadingCanvasEl = document.getElementById('loadingCanvas');
         if (loadingCanvasEl && loadingCanvasEl.clientWidth > 0) {
@@ -361,21 +342,6 @@
         }
       }
       setInterval(keepCanvasSizeSanity, 250);
-      function installCanvasBufferGuard() {
-        var canvas = document.getElementById('canvas');
-        if (!canvas || !window.MutationObserver) return;
-        var fixer = function () {
-          var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
-          var w = Math.round(canvas.clientWidth);
-          var h = Math.round(canvas.clientHeight);
-          if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
-            if (fsEl) { try { resizeLoveCanvases(); } catch (e) {} }
-            else { setCanvasDimensions(canvas, w, h); }
-          }
-        };
-        new MutationObserver(fixer).observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
-      }
-      installCanvasBufferGuard();
       function chaseFullscreen() {
         var c = document.getElementById('canvas');
         var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
