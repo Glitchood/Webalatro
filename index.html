@@ -345,10 +345,12 @@
             resizeLoveCanvases();
           }
         } else {
-          var cw = Math.round(canvas.clientWidth);
-          var ch = Math.round(canvas.clientHeight);
-          if (cw > 0 && ch > 0 && (canvas.width !== cw || canvas.height !== ch)) {
-            resizeLoveCanvases();
+          var dims = viewportDimensions();
+          var w = Math.round(dims[0]);
+          var h = Math.round(dims[1]);
+          if (w > 0 && h > 0 && (canvas.clientWidth !== w || canvas.clientHeight !== h ||
+              canvas.width !== w || canvas.height !== h)) {
+            setCanvasDimensions(canvas, w, h);
           }
         }
         var loadingCanvasEl = document.getElementById('loadingCanvas');
@@ -363,9 +365,13 @@
         var canvas = document.getElementById('canvas');
         if (!canvas || !window.MutationObserver) return;
         var fixer = function () {
+          var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
           var w = Math.round(canvas.clientWidth);
           var h = Math.round(canvas.clientHeight);
-          if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) resizeLoveCanvases();
+          if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
+            if (fsEl) { try { resizeLoveCanvases(); } catch (e) {} }
+            else { setCanvasDimensions(canvas, w, h); }
+          }
         };
         new MutationObserver(fixer).observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
       }
@@ -383,8 +389,8 @@
       }
       chaseFullscreen();
 
-      window.addEventListener('resize', resizeLoveCanvases);
-      window.addEventListener('orientationchange', resizeLoveCanvases);
+      window.addEventListener('resize', function () { try { keepCanvasSizeSanity(); } catch (e) {} });
+      window.addEventListener('orientationchange', function () { try { keepCanvasSizeSanity(); } catch (e) {} });
       document.addEventListener('fullscreenchange', onFullscreenChanged);
       document.addEventListener('webkitfullscreenchange', onFullscreenChanged);
       document.addEventListener('mozfullscreenchange', onFullscreenChanged);
