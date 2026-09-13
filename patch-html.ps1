@@ -552,16 +552,6 @@ $indexHtml = @'
           webLoader.mainStarted = true;
           webLoaderSet('preparing');
           webLoaderFinish();
-          try {
-            if (typeof m.callMain === 'function') { m.callMain(); }
-            else if (typeof m.run === 'function') { m.run(); }
-            else { webLoaderFail(); return; }
-          } catch (err) {
-            if (!(err && (err === 'unwind' || (typeof ExitStatus !== 'undefined' && err instanceof ExitStatus)))) {
-              console.warn('game start error:', err);
-              webLoaderSet('error');
-            }
-          }
         } else {
           var cache = webLoaderFromCache();
           if (cache === true) { webLoaderSet('cache'); }
@@ -636,7 +626,7 @@ $indexHtml = @'
 
           return canvas;
         })(),
-        noInitialRun: true,
+        noInitialRun: false,
         setStatus: function(text, soFar, total) {
           if (text && webLoader.phase !== 'complete' && webLoader.phase !== 'error') {
             if (/downloading data/i.test(text) && typeof soFar === 'number') {
@@ -664,11 +654,9 @@ $indexHtml = @'
         }
       };
       window.onerror = function(event) {
-        if (webLoader.phase !== 'error') {
-          webLoaderFail();
-        }
         try {
           if (typeof Module === 'undefined' || !Module) { return; }
+          Module.setStatus('Exception thrown, see JavaScript console');
           Module.setStatus = function (text) {
             if (text) (Module.printErr || console.error).call(null, '[post-exception status] ' + text);
           };
