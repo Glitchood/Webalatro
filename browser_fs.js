@@ -775,119 +775,150 @@
         return lines;
       }
 
-      function ensureBridgeRoot(){
-        if (Module.BalatroFS._bridgeRoot && pathExists(Module.BalatroFS._bridgeRoot)){
-          return Module.BalatroFS._bridgeRoot;
-        }
+      var BRIDGE_LOVE_BASES = [
+        '/home/web_user/love',
+        '/home/web_user/.config/love',
+        '/home/web_user/.local/share/love',
+        '/home/web_user/.local/share',
+        '/home/web_user/.local',
+        '/home/web_user'
+      ];
 
-        var identityGuesses = getIdentityGuesses();
-        var explicitRoots = [
-          '/webbridge',
-          '/persistent/webbridge',
-          '/home/web_user/love/' + BRIDGE_SUBDIR,
-          '/home/web_user/.local/share/love/' + BRIDGE_SUBDIR,
-          '/home/web_user/.config/love/' + BRIDGE_SUBDIR
-        ];
-        for (var ig = 0; ig < identityGuesses.length; ig++){
-          var identityGuess = identityGuesses[ig];
-          explicitRoots.push('/home/web_user/love/' + identityGuess + '/' + BRIDGE_SUBDIR);
-          explicitRoots.push('/home/web_user/.local/share/love/' + identityGuess + '/' + BRIDGE_SUBDIR);
-          explicitRoots.push('/home/web_user/.config/love/' + identityGuess + '/' + BRIDGE_SUBDIR);
-        }
+      function bridgeRootScore(path){
+        var score = 0;
+        if (path.indexOf('/home/web_user/love/') === 0) score += 100;
+        if (path.indexOf('/.local/share/love/') !== -1 || path.indexOf('/.config/love/') !== -1) score += 30;
+        if (pathExists(joinPath(path, 'bridge_hint.txt'))) score += 1000;
+        return score;
+      }
 
-        for (var r = 0; r < explicitRoots.length; r++){
-          var rootCandidate = explicitRoots[r];
-          if (pathExists(rootCandidate)){
-            Module.BalatroFS._bridgeRoot = rootCandidate;
-            console.log('BalatroFS: bridge root set to', rootCandidate);
-            return rootCandidate;
+      function discoverBridgeRoots(){
+        var best = null;
+        var bestScore = 0;
+        function consider(path){
+          if (!path || !pathExists(path)) return;
+          var score = bridgeRootScore(path);
+          if (score > bestScore){
+            best = path;
+            bestScore = score;
           }
         }
-
-        if (allowBridgeCreate){
-          for (var rc = 0; rc < explicitRoots.length; rc++){
-            var createCandidate = explicitRoots[rc];
-            if (tryCreateBridgeRoot(createCandidate)){
-              Module.BalatroFS._bridgeRoot = createCandidate;
-              console.log('BalatroFS: bridge root created', createCandidate);
-              return createCandidate;
-            }
-          }
-        }
-
-        var baseGuesses = [
-          '/home/web_user/love',
-          '/home/web_user/.config/love',
-          '/home/web_user/.local/share/love',
-          '/home/web_user/.local/share',
-          '/home/web_user/.local',
-          '/home/web_user'
-        ];
-
-        for (var g = 0; g < baseGuesses.length; g++){
-          var base = baseGuesses[g];
-          if (!pathExists(base)){ continue; }
+        for (var g = 0; g < BRIDGE_LOVE_BASES.length; g++){
+          var base = BRIDGE_LOVE_BASES[g];
+          if (!pathExists(base) || !isDirectory(base)) continue;
           var dirs = safeReaddir(base);
           for (var d = 0; d < dirs.length; d++){
             var entry = dirs[d];
-            if (entry === '.' || entry === '..'){ continue; }
-            if (entry === BRIDGE_SUBDIR){
-              var directRoot = joinPath(base, entry);
-              if (pathExists(directRoot)){
-                Module.BalatroFS._bridgeRoot = directRoot;
-                console.log('BalatroFS: bridge root discovered (direct)', directRoot);
-                return directRoot;
-              }
-            }
-            var candidate = joinPath(joinPath(base, entry), BRIDGE_SUBDIR);
-            if (pathExists(candidate)){
-              Module.BalatroFS._bridgeRoot = candidate;
-              warnedBridgeRootMissing = false;
-              warnedMissingRoot = false;
-              console.log('BalatroFS: bridge root discovered (direct)', candidate);
-              return candidate;
-            }
+            if (entry === '.' || entry === '..') continue;
+            if (entry === BRIDGE_SUBDIR) continue;
+            consider(joinPath(joinPath(base, entry), BRIDGE_SUBDIR));
           }
+          consider(joinPath(base, BRIDGE_SUBDIR));
         }
+        return best;
+      }
 
-        var visited = {};
-        var queue = baseGuesses.slice();
+      function discoverBridgeHintRoot(){
+        var queue = BRIDGE_LOVE_BASES.slice();
         queue.push('/persistent');
         queue.push('/');
+        var visited = {};
         var processed = 0;
         var maxNodes = 1024;
-
         while(queue.length && processed < maxNodes){
           var current = queue.shift();
           if (!current || visited[current]){ continue; }
           visited[current] = true;
           processed++;
-
-          var candidate = joinPath(current, BRIDGE_SUBDIR);
-          if (pathExists(candidate)){
-            Module.BalatroFS._bridgeRoot = candidate;
-            warnedBridgeRootMissing = false;
-            warnedMissingRoot = false;
-            console.log('BalatroFS: bridge root set to', candidate);
-            return candidate;
+          var hintFile = joinPath(current, 'bridge_hint.txt');
+          if (pathExists(hintFile)){
+            return current;
           }
-
           var entries = safeReaddir(current);
           for (var i = 0; i < entries.length; i++){
             var name = entries[i];
             if (name === '.' || name === '..') continue;
-            if (name === 'bridge_hint.txt'){
-              Module.BalatroFS._bridgeRoot = current;
-              warnedBridgeRootMissing = false;
-              warnedMissingRoot = false;
-              console.log('BalatroFS: bridge root discovered (hint)', current);
-              return current;
-            }
             var full = joinPath(current, name);
             if (!visited[full] && isDirectory(full)){
               queue.push(full);
             }
           }
+        }
+        return null;
+      }
+
+      function createBridgeRootCandidates(){
+        var candidates = [];
+        function add(p){ if (candidates.indexOf(p) === -1) candidates.push(p); }
+        for (var g = 0; g < BRIDGE_LOVE_BASES.length; g++){
+          var base = BRIDGE_LOVE_BASES[g];
+          if (!pathExists(base) || !isDirectory(base)) continue;
+          var dirs = safeReaddir(base);
+          for (var d = 0; d < dirs.length; d++){
+            var entry = dirs[d];
+            if (entry === '.' || entry === '..' || entry === BRIDGE_SUBDIR) continue;
+            add(joinPath(joinPath(base, entry), BRIDGE_SUBDIR));
+          }
+          add(joinPath(base, BRIDGE_SUBDIR));
+        }
+        var identityGuesses = getIdentityGuesses();
+        for (var i = 0; i < identityGuesses.length; i++){
+          var identityGuess = identityGuesses[i];
+          add('/home/web_user/love/' + identityGuess + '/' + BRIDGE_SUBDIR);
+          add('/home/web_user/.local/share/love/' + identityGuess + '/' + BRIDGE_SUBDIR);
+          add('/home/web_user/.config/love/' + identityGuess + '/' + BRIDGE_SUBDIR);
+        }
+        add('/persistent/' + BRIDGE_SUBDIR);
+        add('/' + BRIDGE_SUBDIR);
+        return candidates;
+      }
+
+      function ensureBridgeRoot(){
+        var cachedRoot = Module.BalatroFS._bridgeRoot;
+
+        var hinted = discoverBridgeHintRoot();
+        if (hinted){
+          if (cachedRoot && hinted !== cachedRoot){
+            console.log('BalatroFS: bridge root re-pointed to', hinted);
+          }
+          Module.BalatroFS._bridgeRoot = hinted;
+          warnedBridgeRootMissing = false;
+          warnedMissingRoot = false;
+          return hinted;
+        }
+
+        if (allowBridgeCreate){
+          var candidates = createBridgeRootCandidates();
+          for (var c = 0; c < candidates.length; c++){
+            var createCandidate = candidates[c];
+            if (tryCreateBridgeRoot(createCandidate)){
+              if (cachedRoot && createCandidate !== cachedRoot){
+                console.log('BalatroFS: bridge root re-pointed to', createCandidate);
+              }else if (!cachedRoot){
+                console.log('BalatroFS: bridge root created', createCandidate);
+              }
+              Module.BalatroFS._bridgeRoot = createCandidate;
+              warnedBridgeRootMissing = false;
+              warnedMissingRoot = false;
+              return createCandidate;
+            }
+          }
+        }
+
+        var discovered = discoverBridgeRoots();
+        if (discovered){
+          if (cachedRoot && discovered !== cachedRoot){
+            console.log('BalatroFS: bridge root re-pointed to', discovered);
+          }
+          Module.BalatroFS._bridgeRoot = discovered;
+          warnedBridgeRootMissing = false;
+          warnedMissingRoot = false;
+          return discovered;
+        }
+
+        if (cachedRoot && pathExists(cachedRoot)){
+          Module.BalatroFS._bridgeRoot = cachedRoot;
+          return cachedRoot;
         }
 
         if (!Module.BalatroFS._bridgeRoot){
