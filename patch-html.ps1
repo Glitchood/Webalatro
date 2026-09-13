@@ -562,6 +562,7 @@ $indexHtml = @'
       function webLoaderFinish() {
         if (webLoader.finished) return;
         webLoader.finished = true;
+        try { document.getElementById('loadingCanvas').style.display = 'none'; } catch (e) {}
         var el = document.getElementById('balatroLoader');
         if (el) {
           el.style.opacity = '0';
