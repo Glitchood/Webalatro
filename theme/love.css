@@ -69,3 +69,89 @@ a:hover {
     visibility: hidden;
     z-index: 1;
 }
+
+/* Webalatro web loader overlay (minimal dark) */
+#balatroLoader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    background: rgb(18, 18, 18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgb(255, 255, 255);
+    font-family: arial, sans-serif;
+    transition: opacity 0.3s ease;
+    cursor: pointer !important;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#balatroLoader * {
+    cursor: pointer !important;
+}
+
+/* Audio-unlock overlay: show the cursor here, but keep it hidden in-game */
+#audio-unlock-overlay,
+#audio-unlock-overlay * {
+    cursor: pointer !important;
+}
+
+#balatroLoader .wl-inner {
+    width: 100%;
+    max-width: 420px;
+    padding: 0 32px;
+    text-align: center;
+}
+
+#balatroLoader .wl-status {
+    font-size: 20px;
+    color: rgb(240, 240, 240);
+    margin-bottom: 10px;
+    min-height: 1.4em;
+}
+
+#balatroLoader .wl-bar {
+    height: 8px;
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
+    background: rgb(10, 10, 10);
+    overflow: hidden;
+}
+
+#balatroLoader .wl-fill {
+    height: 100%;
+    width: 0%;
+    background: rgb(200, 200, 200);
+    transition: width 0.2s ease;
+}
+
+#balatroLoader .wl-pct {
+    font-size: 16px;
+    color: rgb(180, 180, 180);
+    margin-top: 6px;
+    min-height: 1.2em;
+}
+
+#balatroLoader .wl-retry {
+    margin-top: 14px;
+    padding: 8px 28px;
+    font-size: 16px;
+    color: rgb(255, 255, 255);
+    background: rgb(80, 80, 80);
+    border: none;
+    border-radius: 4px;
+}
+
+#balatroLoader .wl-retry:hover {
+    background: rgb(110, 110, 110);
+}
+
+#balatroLoader .wl-hint {
+    margin-top: 14px;
+    font-size: 16px;
+    color: rgb(140, 140, 140);
+}

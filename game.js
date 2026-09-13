@@ -62,12 +62,13 @@ Module.expectedDataFileDownloads++;
             num++;
           }
           total = Math.ceil(total * Module.expectedDataFileDownloads/num);
-          if (Module['setStatus']) Module['setStatus']('Downloading data... (' + loaded + '/' + total + ')');
+          if (Module['setStatus']) Module['setStatus']('Downloading game data', Math.min(event.loaded, total), total);
         } else if (!Module.dataFileDownloads) {
           if (Module['setStatus']) Module['setStatus']('Downloading data...');
         }
       };
       xhr.onerror = function(event) {
+        try { if (window.__balatroWebLoader) window.__balatroWebLoader.fail(); } catch (e) {}
         throw new Error("NetworkError for: " + packageName);
       }
       xhr.onload = function(event) {
@@ -75,6 +76,7 @@ Module.expectedDataFileDownloads++;
           var packageData = xhr.response;
           callback(packageData);
         } else {
+          try { if (window.__balatroWebLoader) window.__balatroWebLoader.fail(); } catch (e) {}
           throw new Error(xhr.statusText + " : " + xhr.responseURL);
         }
       };
@@ -253,6 +255,7 @@ Module.expectedDataFileDownloads++;
               Module.preloadResults[PACKAGE_NAME] = {fromCache: useCached};
               if (useCached) {
                 console.info('loading ' + PACKAGE_NAME + ' from cache');
+                if (Module['setStatus']) Module['setStatus']('Loading game data from cache');
                 fetchCachedPackage(db, PACKAGE_PATH + PACKAGE_NAME, processPackageData, preloadFallback);
               } else {
                 console.info('loading ' + PACKAGE_NAME + ' from remote');
