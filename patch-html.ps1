@@ -47,7 +47,7 @@ $indexHtml = @'
     <center>
       <div>
         <canvas id="loadingCanvas" oncontextmenu="event.preventDefault()" width="800" height="600"></canvas>
-        <canvas id="canvas" oncontextmenu="event.preventDefault()" onclick="goFullScreen();"></canvas>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
       </div>
     </center>
 
@@ -66,22 +66,48 @@ $indexHtml = @'
           return null;
         }
 
+        function toggleFullscreen() {
+          if (isFullscreenActive()) {
+            try { if (document.exitFullscreen) document.exitFullscreen(); } catch (e) {}
+            try { if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch (e) {}
+            try { if (document.mozCancelFullScreen) document.mozCancelFullScreen(); } catch (e) {}
+          } else {
+            goFullScreen();
+          }
+        }
+
+        (function guardGameCanvasFullscreen() {
+          function swallowGameCanvas(proto, key) {
+            var orig = proto[key];
+            if (!orig) return;
+            proto[key] = function (options) {
+              if (this && (this.id === 'canvas' || this.id === 'loadingCanvas')) {
+                return new Promise(function() {});
+              }
+              return orig.call(this, options);
+            };
+          }
+          swallowGameCanvas(Element.prototype, 'requestFullscreen');
+          swallowGameCanvas(Element.prototype, 'webkitRequestFullscreen');
+          swallowGameCanvas(Element.prototype, 'mozRequestFullScreen');
+          swallowGameCanvas(Element.prototype, 'msRequestFullscreen');
+        })();
+
+        window.addEventListener('keydown', function (e) {
+          if (e.key === 'f' || e.key === 'F') {
+            if (e.repeat) return;
+            if (!e.target || (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'input')) return;
+            toggleFullscreen();
+          }
+        });
+
         function goFullScreen(){
-              var canvas = document.getElementById("canvas");
-              if (!canvas) return;
-              canvas.focus();
+              if (document.documentElement) document.documentElement.focus();
               if (isFullscreenActive()) return;
 
-              var requestPromise = requestElementFullscreen(canvas);
-              if (!requestPromise && document.documentElement) {
-                requestPromise = requestElementFullscreen(document.documentElement);
-              }
+              var requestPromise = requestElementFullscreen(document.documentElement);
               if (requestPromise && requestPromise.catch) {
                 requestPromise.catch(function(err){
-                  try {
-                    var retry = requestElementFullscreen(document.documentElement);
-                    if (retry && retry.catch) retry.catch(function(){});
-                  } catch (_) {}
                   console.debug('Fullscreen request failed', err);
                 });
               }
@@ -155,17 +181,20 @@ $indexHtml = @'
         } else {
           console.log('Pointer unlocked - virtual cursor disabled');
           virtualCursor.locked = false;
-          canvas.style.cursor = 'default';
+          canvas.style.cursor = 'none';
         }
       }
 
       function onFullscreenChanged() {
-        resizeLoveCanvases();
+        syncCanvasSizes();
+        setTimeout(syncCanvasSizes, 80);
+        setTimeout(syncCanvasSizes, 250);
         pollAudioUnlock();
         if (!isFullscreenActive()) {
           virtualCursor.locked = false;
-          if (virtualCursor.canvas) virtualCursor.canvas.style.cursor = 'default';
+          if (virtualCursor.canvas) virtualCursor.canvas.style.cursor = 'none';
         }
+        try { afterTransitionDump('fullscreenchange'); } catch (e) {}
       }
 
       // Audio unlock overlay for browsers that block autoplay
@@ -295,43 +324,119 @@ $indexHtml = @'
       setInterval(pollAudioUnlock, 1000);
       // Create overlay after a short delay so it doesn't block immediate interactions
       setTimeout(function() { createAudioUnlockOverlay(); }, 500);
-      function setCanvasDimensions(el, width, height) {
+      function styleBox(el, width, height, left, top) {
         if (!el) { return; }
-        if (el.width !== width) { el.width = width; }
-        if (el.height !== height) { el.height = height; }
-        el.style.width = width + 'px';
-        el.style.height = height + 'px';
+        el.style.setProperty('width', width + 'px', 'important');
+        el.style.setProperty('height', height + 'px', 'important');
+        el.style.setProperty('left', left + 'px', 'important');
+        el.style.setProperty('top', top + 'px', 'important');
       }
 
-      function resizeLoveCanvases() {
-        var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
-        var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
-        width = Math.max(1, width || 0);
-        height = Math.max(1, height || 0);
-        var canvas = document.getElementById('canvas');
+      function viewportDimensions() {
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        if (fsEl) {
+          var fw = fsEl.clientWidth, fh = fsEl.clientHeight;
+          if (fw > 0 && fh > 0) return [Math.round(fw), Math.round(fh)];
+        }
+        var iw = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 800;
+        var ih = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 600;
+        return [Math.max(1, iw || 0), Math.max(1, ih || 0)];
+      }
+
+      function syncCanvasSizes() {
+        var dims = viewportDimensions();
+        var vw = Math.round(dims[0]);
+        var vh = Math.round(dims[1]);
+        if (vw <= 0 || vh <= 0) return;
         var loadingCanvasEl = document.getElementById('loadingCanvas');
-        setCanvasDimensions(canvas, width, height);
-        setCanvasDimensions(loadingCanvasEl, width, height);
-        try {
-          if (typeof Module !== 'undefined' && Module && Module.canvas === canvas) {
-            if (typeof Module.setCanvasSize === 'function') {
-              Module.setCanvasSize(width, height, false);
-            } else if (Module.ctx && Module.ctx.canvas) {
-              setCanvasDimensions(Module.ctx.canvas, width, height);
-            }
+        if (loadingCanvasEl) {
+          if (loadingCanvasEl.width !== vw) loadingCanvasEl.width = vw;
+          if (loadingCanvasEl.height !== vh) loadingCanvasEl.height = vh;
+          styleBox(loadingCanvasEl, vw, vh, 0, 0);
+        }
+        var c = document.getElementById('canvas');
+        if (!c || c.clientWidth <= 0) return;
+        var bw = (c.width > 0) ? c.width : 300;
+        var bh = (c.height > 0) ? c.height : 150;
+        var bAspect = bw / bh;
+        var vAspect = vw / vh;
+        var w = vw, h = vh;
+        if (Math.abs(bAspect - vAspect) / vAspect > 0.08) {
+          if (bAspect > vAspect) {
+            w = vw;
+            h = Math.max(1, Math.round(vw / bAspect));
+          } else {
+            h = vh;
+            w = Math.max(1, Math.round(vh * bAspect));
           }
-        } catch (err) {
-          console.warn('resizeLoveCanvases: unable to propagate size', err);
+        }
+        var left = Math.max(0, Math.round((vw - w) / 2));
+        var top = Math.max(0, Math.round((vh - h) / 2));
+        if (c.clientWidth !== w || c.clientHeight !== h ||
+            Math.abs(c.getBoundingClientRect().left - left) > 0.5 ||
+            Math.abs(c.getBoundingClientRect().top - top) > 0.5) {
+          styleBox(c, w, h, left, top);
         }
       }
+      setInterval(syncCanvasSizes, 250);
+      var loveReconciled = false;
+      function ensureLoveBootResize() {
+        if (loveReconciled) return;
+        var c = document.getElementById('canvas');
+        if (!c) return;
+        if (typeof Module === 'undefined' || !Module || Module.canvas !== c) return;
+        loveReconciled = true;
+        try { syncCanvasSizes(); } catch (e) {}
+        try { afterTransitionDump('boot-reconcile'); } catch (e) {}
+      }
+      setInterval(ensureLoveBootResize, 500);
+      setTimeout(ensureLoveBootResize, 2000);
+      setTimeout(ensureLoveBootResize, 6000);
+      function afterTransitionDump(tag) {
+        setTimeout(function () {
+          try { if (window.__webalatroDump) window.__webalatroDump(tag); } catch (e) {}
+        }, 250);
+      }
+      window.__webalatroDump = function (tag) {
+        var c = document.getElementById('canvas');
+        var r = c ? c.getBoundingClientRect() : null;
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        var info = {
+          tag: tag || 'manual',
+          fs: fsEl ? fsEl.tagName : null,
+          fsClient: fsEl ? Math.round(fsEl.clientWidth) + 'x' + Math.round(fsEl.clientHeight) : null,
+          docClient: Math.round(document.documentElement.clientWidth) + 'x' + Math.round(document.documentElement.clientHeight),
+          inner: window.innerWidth + 'x' + window.innerHeight,
+          screen: (window.screen ? window.screen.width + 'x' + window.screen.height : 'n/a'),
+          dpr: window.devicePixelRatio,
+          canvasAttr: c ? c.width + 'x' + c.height : null,
+          canvasBox: r ? Math.round(r.width) + 'x' + Math.round(r.height) : null,
+          canvasStyle: c ? (c.style.width || '(none)') : null,
+          canvasNative: (typeof Module !== 'undefined' && Module && Module.canvas && Module.canvas.widthNative !== undefined) ? (Module.canvas.widthNative + 'x' + Module.canvas.heightNative) : 'n/a',
+          sharedPtr: (c && c.canvasSharedPtr !== undefined) ? c.canvasSharedPtr : null,
+          heap32: (typeof Module !== 'undefined' && Module && Module.HEAP32) ? true : false,
+          loveReady: typeof Module !== 'undefined' && !!Module && Module.canvas === c
+        };
+        try { console.log('[webalatro] ' + JSON.stringify(info)); } catch (e) {}
+        return info;
+      }
+      function chaseFullscreen() {
+        var c = document.getElementById('canvas');
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null;
+        if (c && fsEl) {
+          syncCanvasSizes();
+        }
+        requestAnimationFrame(chaseFullscreen);
+      }
+      chaseFullscreen();
 
-      window.addEventListener('resize', resizeLoveCanvases);
-      window.addEventListener('orientationchange', resizeLoveCanvases);
+      window.addEventListener('resize', function () { try { syncCanvasSizes(); } catch (e) {} });
+      window.addEventListener('orientationchange', function () { try { syncCanvasSizes(); } catch (e) {} });
       document.addEventListener('fullscreenchange', onFullscreenChanged);
       document.addEventListener('webkitfullscreenchange', onFullscreenChanged);
       document.addEventListener('mozfullscreenchange', onFullscreenChanged);
       document.addEventListener('MSFullscreenChange', onFullscreenChanged);
-      resizeLoveCanvases();
+      syncCanvasSizes();
       var loadingContext = document.getElementById('loadingCanvas').getContext('2d');
       function drawLoadingText(text) {
         var canvas = loadingContext.canvas;
@@ -434,11 +539,11 @@ $indexHtml = @'
           if (loveInstance.FS) { window.FS = loveInstance.FS; }
           ensureBalatroBridgeLoaded();
         }
-        resizeLoveCanvases();
+        syncCanvasSizes();
         ensureBalatroBridgeLoaded();
         // Initialize virtual cursor after Love.js loads
         setTimeout(function() {
-          resizeLoveCanvases();
+          syncCanvasSizes();
           initVirtualCursor();
           ensureBalatroBridgeLoaded();
         }, 1000);
@@ -460,16 +565,26 @@ $css = @'
     box-sizing: border-box;
 }
 
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+* {
+    cursor: none !important;
+}
+
 h1 {
     font-family: arial;
     color: rgb( 11, 86, 117 );
 }
 
 body {
-    background-repeat: no-repeat;
     font-family: arial;
-    margin: 0;
-    padding: none;
     background-color: rgb(32, 32, 32);
     color: rgb(255, 255, 255);
 }
@@ -498,13 +613,24 @@ a:hover {
 }
 
 /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-#canvas {
-    padding-right: 0;
+#canvas,
+#loadingCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
     display: block;
     border: 0px none;
+    margin: 0;
+    padding: 0;
+}
+
+#loadingCanvas {
+    z-index: 2;
+}
+
+#canvas {
     visibility: hidden;
-    width: 100%;
-    height: 100%;
+    z-index: 1;
 }
 '@
 
