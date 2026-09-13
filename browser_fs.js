@@ -1428,9 +1428,9 @@
                 link.style.display = 'none';
                 document.body.appendChild(link);
 
-                // Trigger with multiple methods for stricter browser gesture policies.
+                // Trigger once. A second synthetic click starts a second download
+                // of the same blob, which shows up as a duplicate exported file.
                 try{ link.click(); }catch(_e1){ }
-                try{ link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })); }catch(_e2){ }
 
                 link.remove();
                 saved = true;
