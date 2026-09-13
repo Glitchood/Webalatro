@@ -2098,6 +2098,12 @@ function create_tabs(args)
     tab_buttons[#tab_buttons+1] = UIBox_button({id = 'tab_but_'..(v.label or ''), ref_table = v, button = 'change_tab', label = {v.label}, minh = 0.8*args.scale, minw = 2.5*args.scale, col = true, choice = true, scale = args.text_scale, chosen = v.chosen, func = v.func, focus_args = {type = 'none'}})
   end
 
+  if not args.current then
+    for i, v in ipairs(args.tabs) do
+      if v then args.current = {k = i, v = v} args.current.v.chosen = true break end
+    end
+  end
+
   local t = 
   {n=G.UIT.R, config={padding = 0.0, align = "cm", colour = G.C.CLEAR}, nodes={
     {n=G.UIT.R, config={align = "cm", colour = G.C.CLEAR}, nodes = {
@@ -5319,7 +5325,7 @@ function G.UIDEF.run_setup(from_game_over)
         {tabs = {
             {
                 label = localize('b_new_run'),
-                chosen = (not _challenge_chosen) and (not _can_continue),
+                chosen = (not _challenge_chosen) and (G.STAGE ~= G.STAGES.MAIN_MENU or not _can_continue),
                 tab_definition_function = G.UIDEF.run_setup_option,
                 tab_definition_function_args = 'New Run'
             },

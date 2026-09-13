@@ -204,7 +204,7 @@
           audioUnlock.overlay.style.fontSize = '20px';
           audioUnlock.overlay.style.zIndex = 999999;
           audioUnlock.overlay.style.cursor = 'pointer';
-          audioUnlock.overlay.innerHTML = '<div style="text-align:center"><div>Click or press any key to start</div><div style="font-size:14px;opacity:0.7;margin-top:8px">F to toggle fullscreen / Fix screen sizing issues</div></div>';
+          audioUnlock.overlay.innerText = 'Click or press any key to start';
           audioUnlock.overlay.addEventListener('click', unlockAudioOnce);
           document.body.appendChild(audioUnlock.overlay);
   } catch (e) { }
@@ -414,11 +414,11 @@
         el.id = 'balatroLoader';
         el.innerHTML =
           '<div class="wl-inner">' +
-            '<div id="wlStatus" class="wl-status">Loading...</div>' +
+            '<div id="wlStatus" class="wl-status">Click to Start</div>' +
             '<div class="wl-bar"><div id="wlFill" class="wl-fill"></div></div>' +
             '<div id="wlPct" class="wl-pct"></div>' +
             '<button id="wlRetry" class="wl-retry" style="display:none">Retry</button>' +
-            '<div id="wlHint" class="wl-hint" style="display:none"></div>' +
+            '<div id="wlHint" class="wl-hint">Click to start &middot; F toggles fullscreen</div>' +
           '</div>';
         document.body.appendChild(el);
         return el;
@@ -433,14 +433,14 @@
         var hint = document.getElementById('wlHint');
         var bar = el.querySelector('.wl-bar');
         if (webLoader.phase === 'start') {
-          st.textContent = 'Loading...';
+          st.textContent = 'Click to Start';
           bar.style.visibility = 'hidden';
           fill.style.width = '0%';
           pct.textContent = '';
           retry.style.display = 'none';
           hint.style.display = 'block';
         } else if (webLoader.phase === 'error') {
-          st.textContent = 'Download failed. Please check your network connection.';
+          st.textContent = 'Download failed — check your connection.';
           bar.style.visibility = 'hidden';
           pct.textContent = '';
           retry.style.display = 'inline-block';
@@ -579,7 +579,7 @@
       }, false);
 
         var Module = {
-      arguments: ["./game.data?v=76"],
+      arguments: ["./game.data?v=79"],
         locateFile: function(path, scriptDir) {
           return (scriptDir || '') + path;
         },
