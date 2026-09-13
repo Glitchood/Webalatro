@@ -198,13 +198,13 @@
           audioUnlock.overlay.style.display = 'flex';
           audioUnlock.overlay.style.alignItems = 'center';
           audioUnlock.overlay.style.justifyContent = 'center';
-          audioUnlock.overlay.style.background = 'rgba(32,32,32,32)';
+          audioUnlock.overlay.style.background = 'rgb(18, 18, 18)';
           audioUnlock.overlay.style.color = 'white';
           audioUnlock.overlay.style.fontFamily = 'sans-serif';
           audioUnlock.overlay.style.fontSize = '20px';
           audioUnlock.overlay.style.zIndex = 999999;
           audioUnlock.overlay.style.cursor = 'pointer';
-          audioUnlock.overlay.innerText = 'Click or press any key to enable audio';
+          audioUnlock.overlay.innerHTML = '<div style="text-align:center"><div>Click or press any key to start</div><div style="font-size:14px;opacity:0.7;margin-top:8px">F to toggle fullscreen / Fix screen sizing issues</div></div>';
           audioUnlock.overlay.addEventListener('click', unlockAudioOnce);
           document.body.appendChild(audioUnlock.overlay);
   } catch (e) { }
@@ -405,21 +405,177 @@
       document.addEventListener('mozfullscreenchange', onFullscreenChanged);
       document.addEventListener('MSFullscreenChange', onFullscreenChanged);
       syncCanvasSizes();
-      var loadingContext = document.getElementById('loadingCanvas').getContext('2d');
-      function drawLoadingText(text) {
-        var canvas = loadingContext.canvas;
-
-        loadingContext.fillStyle = "rgb(32, 32, 32)";
-        loadingContext.fillRect(0, 0, canvas.scrollWidth, canvas.scrollHeight);
-
-        loadingContext.font = '2em arial';
-        loadingContext.textAlign = 'center'
-        loadingContext.fillStyle = "rgb(255, 255, 255)";
-        loadingContext.fillText(text, canvas.scrollWidth / 2, canvas.scrollHeight / 2);
-
-        loadingContext.fillText("Powered By Emscripten.", canvas.scrollWidth / 2, canvas.scrollHeight / 4);
-        loadingContext.fillText("Powered By LÖVE.", canvas.scrollWidth / 2, canvas.scrollHeight / 4 * 3);
+      // ---- Webalatro web loader (DOM overlay, replaces the stock canvas loading text) ----
+      var webLoader = { phase: 'start', started: false, loaded: 0, total: 0, fromCache: null, finished: false, mainStarted: false };
+      function webLoaderCreate() {
+        var el = document.getElementById('balatroLoader');
+        if (el) return el;
+        el = document.createElement('div');
+        el.id = 'balatroLoader';
+        el.innerHTML =
+          '<div class="wl-inner">' +
+            '<div id="wlStatus" class="wl-status">Loading...</div>' +
+            '<div class="wl-bar"><div id="wlFill" class="wl-fill"></div></div>' +
+            '<div id="wlPct" class="wl-pct"></div>' +
+            '<button id="wlRetry" class="wl-retry" style="display:none">Retry</button>' +
+            '<div id="wlHint" class="wl-hint" style="display:none"></div>' +
+          '</div>';
+        document.body.appendChild(el);
+        return el;
       }
+      function webLoaderUpdate() {
+        var el = document.getElementById('balatroLoader');
+        if (!el) return;
+        var st = document.getElementById('wlStatus');
+        var fill = document.getElementById('wlFill');
+        var pct = document.getElementById('wlPct');
+        var retry = document.getElementById('wlRetry');
+        var hint = document.getElementById('wlHint');
+        var bar = el.querySelector('.wl-bar');
+        if (webLoader.phase === 'start') {
+          st.textContent = 'Loading...';
+          bar.style.visibility = 'hidden';
+          fill.style.width = '0%';
+          pct.textContent = '';
+          retry.style.display = 'none';
+          hint.style.display = 'block';
+        } else if (webLoader.phase === 'error') {
+          st.textContent = 'Download failed. Please check your network connection.';
+          bar.style.visibility = 'hidden';
+          pct.textContent = '';
+          retry.style.display = 'inline-block';
+          hint.style.display = 'none';
+        } else if (webLoader.phase === 'cache') {
+          st.textContent = 'Loading game data from cache';
+          bar.style.visibility = 'hidden';
+          pct.textContent = '';
+          retry.style.display = 'none';
+          hint.style.display = 'none';
+        } else {
+          bar.style.visibility = 'visible';
+          retry.style.display = 'none';
+          hint.style.display = 'none';
+          if (webLoader.total > 0) {
+            var ratio = webLoader.loaded / webLoader.total;
+            if (ratio < 0) ratio = 0;
+            if (ratio > 1) ratio = 1;
+            var p = Math.floor(ratio * 100);
+            fill.style.width = p + '%';
+            pct.textContent = p + '% \u00B7 ' + (webLoader.loaded / 1048576).toFixed(1) + ' / ' + (webLoader.total / 1048576).toFixed(1) + ' MB';
+            st.textContent = webLoader.phase === 'preparing' ? 'Preparing\u2026' :
+                             (webLoader.phase === 'complete' ? 'All downloads complete\u2026' : 'Downloading game data\u2026');
+          } else {
+            fill.style.width = '100%';
+            pct.textContent = '';
+            st.textContent = webLoader.phase === 'preparing' ? 'Preparing\u2026' : 'Starting\u2026';
+          }
+        }
+      }
+      function webLoaderSet(phase, loaded, total) {
+        webLoader.phase = phase;
+        if (typeof loaded === 'number') webLoader.loaded = loaded;
+        if (typeof total === 'number' && total > 0) webLoader.total = total;
+        webLoaderUpdate();
+      }
+      function webLoaderFromCache() {
+        if (webLoader.fromCache !== null) return webLoader.fromCache;
+        try {
+          if (typeof Module === 'undefined' || !Module) return null;
+          var pr = Module.preloadResults && Module.preloadResults['game.data'];
+          if (pr && pr.fromCache !== undefined) {
+            webLoader.fromCache = pr.fromCache;
+            return webLoader.fromCache;
+          }
+        } catch (e) {}
+        return null;
+      }
+      function webLoaderDataDone(notify) {
+        try {
+          if (typeof Module === 'undefined' || !Module) return false;
+          if (Module.remainingDependencies !== 0) return false;
+          if (Module.preloadResults && Module.preloadResults['game.data']) {
+            if (notify) {
+              webLoaderSet('complete');
+              setTimeout(function () { if (!webLoader.mainStarted) webLoaderStart(); }, 80);
+            }
+            return true;
+          }
+          if (Module.finishedDataFileDownloads > 0) {
+            if (notify) {
+              webLoaderSet('complete');
+              setTimeout(function () { if (!webLoader.mainStarted) webLoaderStart(); }, 80);
+            }
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      }
+      function webLoaderStart() {
+        if (webLoader.phase === 'error') return;
+        if (webLoader.mainStarted) return;
+        webLoader.started = true;
+        var m = (typeof Module !== 'undefined') ? Module : null;
+        if (!m) { setTimeout(webLoaderStart, 100); return; }
+        if (webLoaderDataDone()) {
+          webLoader.mainStarted = true;
+          webLoaderSet('preparing');
+          webLoaderFinish();
+          try {
+            if (typeof m.callMain === 'function') { m.callMain(); }
+            else if (typeof m.run === 'function') { m.run(); }
+            else { webLoaderFail(); return; }
+          } catch (err) {
+            if (!(err && (err === 'unwind' || (typeof ExitStatus !== 'undefined' && err instanceof ExitStatus)))) {
+              console.warn('game start error:', err);
+              webLoaderSet('error');
+            }
+          }
+        } else {
+          var cache = webLoaderFromCache();
+          if (cache === true) { webLoaderSet('cache'); }
+          else { webLoaderSet('preparing'); }
+          setTimeout(webLoaderStart, 200);
+        }
+      }
+      function webLoaderFinish() {
+        if (webLoader.finished) return;
+        webLoader.finished = true;
+        var el = document.getElementById('balatroLoader');
+        if (el) {
+          el.style.opacity = '0';
+          setTimeout(function () {
+            el.style.display = 'none';
+            try { document.getElementById('canvas').style.visibility = 'visible'; } catch (e) {}
+          }, 300);
+        } else {
+          try { document.getElementById('canvas').style.visibility = 'visible'; } catch (e) {}
+        }
+      }
+      function webLoaderFail() { webLoaderSet('error'); }
+      function webLoaderRetry() { try { window.location.reload(); } catch (e) {} }
+      window.__balatroWebLoader = { fail: webLoaderFail, retry: webLoaderRetry };
+      function webLoaderOnClick(e) {
+        if (typeof e !== 'undefined' && e) { try { e.preventDefault(); } catch (err) {} }
+        if (webLoader.phase !== 'error') { webLoaderStart(); }
+        else { webLoaderRetry(); }
+      }
+      function webLoaderTick() {
+        var el = document.getElementById('balatroLoader');
+        if (!el) return;
+        if (webLoader.started && webLoader.phase !== 'complete' && webLoader.phase !== 'error' && webLoader.phase !== 'start') {
+          var cache = webLoaderFromCache();
+          if (cache === true && webLoader.phase === 'preparing') { webLoaderSet('cache'); return; }
+          if (webLoaderDataDone()) {
+            webLoaderSet('complete');
+            setTimeout(function () {
+              if (!webLoader.mainStarted) webLoaderStart();
+            }, 80);
+          }
+        }
+      }
+      webLoaderCreate();
+      document.getElementById('balatroLoader').addEventListener('click', webLoaderOnClick);
+      setInterval(webLoaderTick, 250);
 
       window.onload = function () { window.focus(); };
       window.onclick = function () { window.focus(); };
@@ -448,12 +604,19 @@
 
           return canvas;
         })(),
-        setStatus: function(text) {
-          if (text) {
-            drawLoadingText(text);
-          } else if (Module.remainingDependencies === 0) {
-            document.getElementById('loadingCanvas').style.display = 'none';
-            document.getElementById('canvas').style.visibility = 'visible';
+        noInitialRun: true,
+        setStatus: function(text, soFar, total) {
+          if (text && webLoader.phase !== 'complete' && webLoader.phase !== 'error') {
+            if (/downloading data/i.test(text) && typeof soFar === 'number') {
+              webLoaderSet('loading', soFar, typeof total === 'number' ? total : 0);
+            } else if (/preparing/i.test(text)) {
+              webLoaderSet('preparing');
+            } else if (/cache/i.test(text)) {
+              webLoaderSet('cache');
+            }
+          } else if (!text && Module.remainingDependencies === 0) {
+            webLoaderDataDone(true);
+            webLoaderSet('complete');
           }
         },
         totalDependencies: 0,
@@ -461,16 +624,23 @@
         monitorRunDependencies: function(left) {
           this.remainingDependencies = left;
           this.totalDependencies = Math.max(this.totalDependencies, left);
-          Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+          if (left) {
+            webLoaderSet('preparing');
+          } else if (Module.remainingDependencies === 0) {
+            webLoaderDataDone(true);
+          }
         }
       };
-      Module.setStatus('Downloading...');
       window.onerror = function(event) {
-        // TODO: do not warn on ok events like simulating an infinite loop or exitStatus
-        Module.setStatus('Exception thrown, see JavaScript console');
-        Module.setStatus = function(text) {
-          if (text) Module.printErr('[post-exception status] ' + text);
-        };
+        if (webLoader.phase !== 'error') {
+          webLoaderFail();
+        }
+        try {
+          if (typeof Module === 'undefined' || !Module) { return; }
+          Module.setStatus = function (text) {
+            if (text) (Module.printErr || console.error).call(null, '[post-exception status] ' + text);
+          };
+        } catch (err) {}
       };
 
       function ensureBalatroBridgeLoaded() {
@@ -490,6 +660,12 @@
 
       var applicationLoad = function(e) {
         var loveInstance = Love(Module);
+        var afterInstance = function() {
+          ensureBalatroBridgeLoaded();
+          if (webLoader.started && !webLoader.mainStarted && webLoaderDataDone()) {
+            setTimeout(webLoaderStart, 50);
+          }
+        };
         if (loveInstance && typeof loveInstance.then === 'function') {
           loveInstance.then(function(instance){
             if (instance) {
@@ -497,7 +673,7 @@
               window.Module = instance;
               if (instance.FS) { window.FS = instance.FS; }
             }
-            ensureBalatroBridgeLoaded();
+            afterInstance();
           }).catch(function(err){
             console.warn('Love init failed', err);
           });
@@ -505,10 +681,10 @@
           Module = loveInstance;
           window.Module = loveInstance;
           if (loveInstance.FS) { window.FS = loveInstance.FS; }
-          ensureBalatroBridgeLoaded();
+          afterInstance();
         }
         syncCanvasSizes();
-        ensureBalatroBridgeLoaded();
+        afterInstance();
         // Initialize virtual cursor after Love.js loads
         setTimeout(function() {
           syncCanvasSizes();
