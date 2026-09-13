@@ -94,7 +94,6 @@ a:hover {
     cursor: pointer !important;
 }
 
-/* Audio-unlock overlay: show the cursor here, but keep it hidden in-game */
 #audio-unlock-overlay,
 #audio-unlock-overlay * {
     cursor: pointer !important;
@@ -108,7 +107,7 @@ a:hover {
 }
 
 #balatroLoader .wl-status {
-    font-size: 20px;
+    font-size: 16px;
     color: rgb(240, 240, 240);
     margin-bottom: 10px;
     min-height: 1.4em;
